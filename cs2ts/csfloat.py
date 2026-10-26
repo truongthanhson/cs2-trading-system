@@ -20,10 +20,11 @@ The graph's daily average is still skewed by premium copies, so it is too
 noisy for a trend (a few sticker crafts can move it 40%). The trend instead
 comes from our own history of fair prices, saved with every daily snapshot.
 
-In the snapshot rows, median_30d holds today's fair price and median_7d
-holds the median fair price over our last 7 snapshot days, so the scanner's
-discount and momentum checks work unchanged. Until a week of snapshots has
-built up, median_7d equals today's fair price (no trend filter).
+In the snapshot rows, median_30d holds today's fair price (the target).
+median_7d is set so that the scanner's momentum, median_7d / median_30d - 1,
+equals today's fair price against the median fair price of the previous six
+snapshot days: negative when the item is getting cheaper. With no earlier
+snapshots, median_7d equals today's fair price (no trend filter).
 
 CSFloat has no bulk sales-history endpoint, so history is fetched per item
 for a shortlist (the "universe"): items in the configured price range with
@@ -115,13 +116,13 @@ def build_row(item: dict, graph: list[dict], sales: list[dict], today: date,
     """past_fair: this item's fair prices from earlier snapshots in the last 6 days."""
     g = summarize_graph(graph, today)
     fair = fair_price(sales)
-    recent = [*past_fair, fair] if fair else []
+    trend = fair / statistics.median(past_fair) if fair and past_fair else 1.0
     return {
         "name": item["market_hash_name"],
         "min_price": item["min_price"] / 100,
         "listings": item["quantity"],
         "median_24h": g["median_24h"], "volume_24h": g["volume_24h"],
-        "median_7d": round(statistics.median(recent), 2) if recent else None,
+        "median_7d": round(fair * trend, 2) if fair else None,
         "volume_7d": g["volume_7d"],
         "median_30d": fair, "volume_30d": g["volume_30d"],
         "median_90d": g["median_90d"], "volume_90d": g["volume_90d"],

@@ -220,10 +220,16 @@ class CsfloatTest(unittest.TestCase):
         graph = json.loads((FIXTURES / "csfloat_graph.json").read_text())
         sales = json.loads((FIXTURES / "csfloat_sales.json").read_text())
         item = {"market_hash_name": "x", "quantity": 900, "min_price": 2000}
+        # Fair price slid from ~27.50 to 24.10 over the week: a falling item.
         r = csfloat.build_row(item, graph, sales, date(2026, 10, 26), [28.0, 27.5, 27.0])
-        # Fair price slid from ~28 to 24.10 over the week.
-        self.assertEqual(r["median_7d"], 27.25)
         self.assertEqual(r["median_30d"], 24.10)
+        momentum = r["median_7d"] / r["median_30d"] - 1
+        self.assertAlmostEqual(momentum, 24.10 / 27.5 - 1, places=3)
+        # 20% under the fair price, but falling >10%, so the scanner skips it.
+        self.assertIsNone(evaluate(r, Config()))
+        # The same listing on a steady item is a signal.
+        steady = csfloat.build_row(item, graph, sales, date(2026, 10, 26), [24.0, 24.2])
+        self.assertIsNotNone(evaluate(steady, Config()))
 
     def test_collect_stops_before_rate_limit(self):
         price_list = [{"market_hash_name": f"item {i}", "quantity": 100 - i, "min_price": 400}
