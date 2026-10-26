@@ -7,11 +7,15 @@ from pathlib import Path
 
 @dataclass
 class Config:
+    # Where prices come from: "csfloat" or "skinport".
+    source: str = "csfloat"
     currency: str = "USD"
     db_path: str = "data/cs2ts.sqlite"
 
-    # Skinport takes a cut when you sell. Check the current rate on their site.
-    sell_fee: float = 0.08
+    # Everything lost between the sale price and money in your bank: the
+    # marketplace's sale fee plus its withdrawal fee. The default assumes
+    # CSFloat's ~2% sale fee and ~2.5% withdrawal fee; check the current rates.
+    sell_fee: float = 0.045
     # Only look at items in this price range (USD).
     min_price: float = 2.0
     max_price: float = 300.0
@@ -32,6 +36,11 @@ class Config:
     trade_lock_days: int = 7
     max_hold_days: int = 45
     stop_loss: float = 0.20
+
+    # CSFloat: how many of the most-listed items get a sales-history lookup
+    # each run, and the pause between lookups (seconds).
+    csfloat_universe_size: int = 300
+    csfloat_request_delay: float = 1.0
 
 
 def load_config(path: str | Path = "config.json") -> Config:

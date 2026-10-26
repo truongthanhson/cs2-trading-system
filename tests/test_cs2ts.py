@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from cs2ts import paper
+from datetime import date
+
+from cs2ts import csfloat, paper
 from cs2ts.__main__ import main
 from cs2ts.collect import merge
 from cs2ts.config import Config, load_config
@@ -42,7 +44,7 @@ class MergeTest(unittest.TestCase):
 
 
 class ScanTest(unittest.TestCase):
-    cfg = Config()
+    cfg = Config(sell_fee=0.08)
 
     def test_discounted_liquid_item_is_a_signal(self):
         sig = evaluate(row(price=8.0, m30=10.0), self.cfg)
@@ -75,9 +77,10 @@ class ScanTest(unittest.TestCase):
 
 class PaperTest(unittest.TestCase):
     def setUp(self):
-        self.cfg = Config(db_path=":memory:", paper_budget=30.0,
+        self.cfg = Config(db_path=":memory:", sell_fee=0.08, paper_budget=30.0,
                           paper_max_positions=2, paper_max_per_position=20.0)
         self.conn = connect(":memory:")
+        self.addCleanup(self.conn.close)
 
     def day(self, d, rows):
         save_snapshot(self.conn, d, rows)
@@ -168,6 +171,45 @@ class DashboardTest(unittest.TestCase):
                 self.assertEqual(history[0]["min_price"], 8.0)
             finally:
                 server.shutdown()
+                server.server_close()
+
+
+class CsfloatTest(unittest.TestCase):
+    def test_pick_universe_filters_price_and_sorts_by_listings(self):
+        price_list = [
+            {"market_hash_name": "cheap", "quantity": 9000, "min_price": 150},
+            {"market_hash_name": "a", "quantity": 100, "min_price": 500},
+            {"market_hash_name": "b", "quantity": 4000, "min_price": 350},
+            {"market_hash_name": "thin", "quantity": 2, "min_price": 800},
+            {"market_hash_name": "c", "quantity": 700, "min_price": 2500},
+        ]
+        picked = csfloat.pick_universe(price_list, 2.0, 300.0, 3, size=2)
+        self.assertEqual([p["market_hash_name"] for p in picked], ["b", "c"])
+
+    def test_summarize_graph(self):
+        graph = json.loads((FIXTURES / "csfloat_graph.json").read_text())
+        s = csfloat.summarize_graph(graph, date(2026, 10, 26))
+        self.assertEqual(s["volume_24h"], 12)
+        self.assertEqual(s["median_24h"], 3.52)
+        self.assertEqual(s["volume_7d"], 12 + 40 + 38)
+        self.assertEqual(s["median_7d"], 3.55)
+        # The 2026-09-20 point is outside 30 days but inside 90.
+        self.assertEqual(s["volume_30d"], 90)
+        self.assertEqual(s["volume_90d"], 90 + 50)
+
+    def test_collect_stops_before_rate_limit(self):
+        price_list = [{"market_hash_name": f"item {i}", "quantity": 100 - i, "min_price": 400}
+                      for i in range(5)]
+        graph = json.loads((FIXTURES / "csfloat_graph.json").read_text())
+        remaining = iter([200, 100, 25, 10, 5])
+        cfg = Config(csfloat_universe_size=5)
+        with mock.patch("cs2ts.csfloat.fetch_price_list", return_value=price_list), \
+             mock.patch("cs2ts.csfloat.fetch_graph", side_effect=lambda n: (graph, next(remaining))):
+            rows = csfloat.collect(cfg, date(2026, 10, 26), sleep=lambda s: None, log=lambda m: None)
+        self.assertEqual([r["name"] for r in rows], ["item 0", "item 1", "item 2"])
+        self.assertEqual(rows[0]["min_price"], 4.0)
+        self.assertEqual(rows[0]["listings"], 100)
+        self.assertEqual(rows[0]["volume_30d"], 90)
 
 
 class CliTest(unittest.TestCase):
@@ -176,7 +218,8 @@ class CliTest(unittest.TestCase):
         history = json.loads((FIXTURES / "sales_history.json").read_text())
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = Path(tmp) / "config.json"
-            cfg_path.write_text(json.dumps({"db_path": str(Path(tmp) / "db.sqlite")}))
+            cfg_path.write_text(json.dumps({"source": "skinport", "sell_fee": 0.08,
+                                            "db_path": str(Path(tmp) / "db.sqlite")}))
             out = io.StringIO()
             with mock.patch("cs2ts.skinport.fetch_items", return_value=items), \
                  mock.patch("cs2ts.skinport.fetch_sales_history", return_value=history), \
@@ -193,7 +236,8 @@ class CliTest(unittest.TestCase):
 class ConfigTest(unittest.TestCase):
     def test_example_config_loads(self):
         cfg = load_config(Path(__file__).parent.parent / "config.example.json")
-        self.assertEqual(cfg.sell_fee, 0.08)
+        self.assertEqual(cfg.source, "csfloat")
+        self.assertEqual(cfg.sell_fee, 0.045)
 
     def test_unknown_key_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

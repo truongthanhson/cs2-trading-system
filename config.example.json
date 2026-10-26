@@ -1,8 +1,9 @@
 {
+  "source": "csfloat",
   "currency": "USD",
   "db_path": "data/cs2ts.sqlite",
 
-  "sell_fee": 0.08,
+  "sell_fee": 0.045,
   "min_price": 2.0,
   "max_price": 300.0,
   "min_volume_30d": 60,
@@ -16,5 +17,8 @@
   "paper_max_per_position": 25.0,
   "trade_lock_days": 7,
   "max_hold_days": 45,
-  "stop_loss": 0.20
+  "stop_loss": 0.20,
+
+  "csfloat_universe_size": 300,
+  "csfloat_request_delay": 1.0
 }

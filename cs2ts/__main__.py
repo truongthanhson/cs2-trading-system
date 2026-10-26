@@ -1,6 +1,6 @@
 """Command line: python -m cs2ts <command>
 
-  collect   fetch today's Skinport prices and save a snapshot
+  collect   fetch today's prices (CSFloat or Skinport) and save a snapshot
   scan      list current buy signals from the latest snapshot
   paper     run one paper-trading step on the latest snapshot
   report    show paper-trading profit and loss
@@ -14,7 +14,7 @@ import csv
 import sys
 from datetime import date
 
-from . import paper, skinport
+from . import csfloat, paper, skinport
 from .collect import merge
 from .config import load_config
 from .db import connect, latest_day, save_snapshot, snapshot
@@ -22,10 +22,14 @@ from .scan import scan
 
 
 def cmd_collect(conn, cfg, args):
-    items = skinport.fetch_items(cfg.currency)
-    history = skinport.fetch_sales_history(cfg.currency)
     day = args.day or date.today().isoformat()
-    n = save_snapshot(conn, day, merge(items, history))
+    if cfg.source == "csfloat":
+        rows = csfloat.collect(cfg, date.fromisoformat(day))
+    elif cfg.source == "skinport":
+        rows = merge(skinport.fetch_items(cfg.currency), skinport.fetch_sales_history(cfg.currency))
+    else:
+        sys.exit(f"Unknown source {cfg.source!r}; use \"csfloat\" or \"skinport\".")
+    n = save_snapshot(conn, day, rows)
     print(f"Saved {n} items for {day}.")
 
 
@@ -124,10 +128,13 @@ def main(argv=None):
         from .demo import DEMO_DB
         return serve(replace(cfg, db_path=DEMO_DB) if args.demo else cfg, port=args.port)
     conn = connect(cfg.db_path)
-    {
-        "collect": cmd_collect, "scan": cmd_scan, "paper": cmd_paper,
-        "report": cmd_report, "daily": cmd_daily,
-    }[args.command](conn, cfg, args)
+    try:
+        {
+            "collect": cmd_collect, "scan": cmd_scan, "paper": cmd_paper,
+            "report": cmd_report, "daily": cmd_daily,
+        }[args.command](conn, cfg, args)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
