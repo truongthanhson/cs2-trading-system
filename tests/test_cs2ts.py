@@ -124,6 +124,51 @@ class PaperTest(unittest.TestCase):
         self.assertAlmostEqual(r["realized_pnl"], expected_realized)
         self.assertAlmostEqual(r["equity"], 30.0 + expected_realized + expected_unrealized)
 
+    def test_equity_curve_tracks_realized_and_open_positions(self):
+        self.day("2026-11-01", [row("a", price=8.0)])
+        self.day("2026-11-08", [row("a", price=10.5)])
+        curve = paper.equity_curve(self.conn, self.cfg)
+        self.assertEqual([c["day"] for c in curve], ["2026-11-01", "2026-11-08"])
+        # Day 1: holding "a", marked at today's exit price after fee.
+        self.assertAlmostEqual(curve[0]["equity"], 30.0 + 8.0 * 0.99 * 0.92 - 8.0)
+        self.assertEqual(curve[0]["open_positions"], 1)
+        # Day 8: sold at target; the final equity matches the report.
+        report = paper.report(self.conn, "2026-11-08", self.cfg)
+        self.assertAlmostEqual(curve[-1]["equity"], report["equity"])
+        self.assertAlmostEqual(curve[-1]["realized"], 10.5 * 0.99 * 0.92 - 8.0)
+
+
+class DashboardTest(unittest.TestCase):
+    def test_endpoints_over_http(self):
+        import threading
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from cs2ts.dashboard import make_handler
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(db_path=str(Path(tmp) / "db.sqlite"))
+            conn = connect(cfg.db_path)
+            save_snapshot(conn, "2026-11-01", [row("a", price=8.0), row("b", price=9.9)])
+            paper.step(conn, "2026-11-01", cfg)
+            conn.close()
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(cfg))
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            get = lambda path: urllib.request.urlopen(base + path).read()
+            try:
+                self.assertIn(b"CS2 Trading Dashboard", get("/"))
+                summary = json.loads(get("/api/summary"))
+                self.assertEqual(summary["day"], "2026-11-01")
+                self.assertFalse(summary["demo"])
+                self.assertEqual([p["name"] for p in summary["open"]], ["a"])
+                self.assertEqual(len(json.loads(get("/api/equity"))), 1)
+                self.assertEqual([s["name"] for s in json.loads(get("/api/signals"))], ["a"])
+                history = json.loads(get("/api/history?name=a"))
+                self.assertEqual(history[0]["min_price"], 8.0)
+            finally:
+                server.shutdown()
+
 
 class CliTest(unittest.TestCase):
     def test_daily_with_mocked_api(self):

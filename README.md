@@ -37,6 +37,31 @@ Chạy `daily` **mỗi ngày một lần**, đều đặn ít nhất 3–4 tuầ
 
 Dữ liệu được lưu trong `data/cs2ts.sqlite`. Đừng xoá file này, vì lịch sử paper trade nằm ở đó.
 
+## Dashboard
+
+```bash
+python -m cs2ts dashboard          # mở http://localhost:8000 trên trình duyệt
+```
+
+Dashboard gồm:
+
+- Các chỉ số chính: giá trị tài khoản, lãi đã chốt, lãi tạm tính, tỉ lệ thắng và tiền mặt.
+- Biểu đồ giá trị tài khoản theo từng ngày.
+- Bảng vị thế đang giữ, có đánh dấu món còn trong 7 ngày khóa.
+- Bảng lệnh đã đóng, kèm lý do bán.
+- Bảng cơ hội hôm nay. Bấm vào một dòng để xem lịch sử giá của item đó.
+
+Dashboard chỉ đọc dữ liệu, không thay đổi gì. Bấm "Tải lại" sau mỗi lần chạy `daily` để thấy số mới.
+
+Muốn xem thử giao diện khi chưa có dữ liệu thật:
+
+```bash
+python -m cs2ts demo               # tạo 60 ngày dữ liệu giả trong data/demo.sqlite
+python -m cs2ts dashboard --demo
+```
+
+Dữ liệu demo hoàn toàn ngẫu nhiên. Lãi/lỗ trong demo **không** nói lên điều gì về chiến lược.
+
 ## Đọc kết quả `scan`
 
 | Cột | Ý nghĩa |

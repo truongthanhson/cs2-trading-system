@@ -5,6 +5,8 @@
   paper     run one paper-trading step on the latest snapshot
   report    show paper-trading profit and loss
   daily     collect + paper + report (run this once a day)
+  dashboard open the web dashboard on http://localhost:8000
+  demo      write fake data to try the dashboard (dashboard --demo)
 """
 
 import argparse
@@ -104,9 +106,23 @@ def main(argv=None):
     p.add_argument("--csv", help="also write every signal to this CSV file")
     sub.add_parser("paper")
     sub.add_parser("report")
+    p = sub.add_parser("dashboard")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--demo", action="store_true", help="show the fake data from `demo`")
+    sub.add_parser("demo")
 
     args = parser.parse_args(argv)
     cfg = load_config(args.config)
+    if args.command == "demo":
+        from .demo import generate
+        generate(cfg)
+        print("Wrote fake data to data/demo.sqlite. View it: python -m cs2ts dashboard --demo")
+        return
+    if args.command == "dashboard":
+        from dataclasses import replace
+        from .dashboard import serve
+        from .demo import DEMO_DB
+        return serve(replace(cfg, db_path=DEMO_DB) if args.demo else cfg, port=args.port)
     conn = connect(cfg.db_path)
     {
         "collect": cmd_collect, "scan": cmd_scan, "paper": cmd_paper,

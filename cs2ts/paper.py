@@ -94,6 +94,31 @@ def step(conn: sqlite3.Connection, day: str, cfg: Config) -> dict:
     return {"sold": sold, "bought": bought}
 
 
+def equity_curve(conn: sqlite3.Connection, cfg: Config) -> list[dict]:
+    """Paper account value at the end of every snapshot day."""
+    days = [r[0] for r in conn.execute("SELECT DISTINCT day FROM snapshots ORDER BY day")]
+    positions = conn.execute("SELECT * FROM positions").fetchall()
+    curve = []
+    for day in days:
+        realized = unrealized = 0.0
+        held = [p for p in positions if p["buy_day"] <= day
+                and not (p["sell_day"] and p["sell_day"] <= day)]
+        for p in positions:
+            if p["sell_day"] and p["sell_day"] <= day:
+                realized += p["net_proceeds"] - p["buy_price"]
+        if held:
+            marks = {r["name"]: r["min_price"] for r in conn.execute(
+                "SELECT name, min_price FROM snapshots WHERE day = ? AND name IN (%s)"
+                % ",".join("?" * len(held)), (day, *[p["name"] for p in held]))}
+            for p in held:
+                price = marks.get(p["name"])
+                mark = price * UNDERCUT * (1 - cfg.sell_fee) if price else p["buy_price"]
+                unrealized += mark - p["buy_price"]
+        curve.append({"day": day, "equity": cfg.paper_budget + realized + unrealized,
+                      "realized": realized, "open_positions": len(held)})
+    return curve
+
+
 def report(conn: sqlite3.Connection, day: str, cfg: Config) -> dict:
     closed = conn.execute(
         "SELECT * FROM positions WHERE sell_day IS NOT NULL ORDER BY sell_day"
