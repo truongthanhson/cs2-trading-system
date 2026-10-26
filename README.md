@@ -2,7 +2,7 @@
 
 Công cụ cá nhân để swing trade skin CS2 dựa trên dữ liệu. Ý tưởng chính:
 
-1. Mỗi ngày lấy giá rao thấp nhất của toàn bộ item CS2 trên **CSFloat**, cùng lịch sử bán của khoảng 300 item được rao nhiều nhất. Tool dùng API công khai, không cần tài khoản hay API key.
+1. Mỗi ngày lấy giá rao thấp nhất của toàn bộ item CS2 trên **CSFloat**, cùng lịch sử bán của khoảng 200 item được rao nhiều nhất. Tool dùng API công khai, không cần tài khoản hay API key.
 2. Tìm item đang được rao bán **rẻ hơn rõ rệt so với giá bán trung vị 30 ngày**, vẫn **bán chạy**, và **không đang trong đà rơi**.
 3. Chỉ giữ những cơ hội vẫn **có lời sau phí bán**.
 4. Chạy **paper trade** (giao dịch giả lập bằng tiền ảo) để đo lãi/lỗ thật trước khi bỏ tiền thật.
@@ -67,7 +67,7 @@ Dữ liệu demo hoàn toàn ngẫu nhiên. Lãi/lỗ trong demo **không** nói
 | Cột | Ý nghĩa |
 |---|---|
 | buy | Giá rao thấp nhất hiện tại trên sàn |
-| target | Trung vị giá bán theo ngày trong 30 ngày, tức mức kỳ vọng bán lại |
+| target | Giá mục tiêu: mức một bản "thường" hay bán được gần đây, tức mức kỳ vọng bán lại |
 | net | Lãi ròng mỗi món nếu bán được ở target, sau phí bán |
 | roi | Lãi ròng / giá mua |
 | disc | Giá hiện tại rẻ hơn trung vị 30 ngày bao nhiêu % |
@@ -96,14 +96,14 @@ Dữ liệu demo hoàn toàn ngẫu nhiên. Lãi/lỗ trong demo **không** nói
 | `min_discount` | 0.10 | Rẻ hơn trung vị 30 ngày ít nhất 10% |
 | `min_net_roi` | 0.05 | Lãi ròng tối thiểu 5% sau phí |
 | `max_momentum_drop` | 0.10 | Bỏ qua item có giá 7 ngày giảm hơn 10% so với 30 ngày |
-| `csfloat_universe_size` | 300 | Số item (rao nhiều nhất trong khoảng giá) được lấy lịch sử bán mỗi lần chạy |
+| `csfloat_universe_size` | 200 | Số item (rao nhiều nhất trong khoảng giá) được lấy lịch sử bán mỗi lần chạy |
 | `csfloat_request_delay` | 1.0 | Số giây nghỉ giữa các lần gọi API, để không bị giới hạn |
 
 ## Giới hạn cần biết
 
 - Giá rao thấp nhất có thể là món có float xấu hoặc pattern kém hơn các món khác cùng tên. Trước khi mua thật, luôn mở trang item để xem kỹ.
-- Với CSFloat, "số lượt bán" và "trung vị" được tính từ dữ liệu bán theo ngày của chính CSFloat (giá trung bình mỗi ngày và số lượt bán).
-- Mỗi lần chạy `daily` với CSFloat mất khoảng 5–6 phút, vì tool nghỉ 1 giây giữa mỗi lần gọi API. Nếu sắp chạm giới hạn gọi API, tool tự dừng sớm và giữ phần dữ liệu đã lấy được.
+- Với CSFloat, **giá mục tiêu** là trung vị giá bán của các bản "thường" trong 40 lượt bán gần nhất. Tool bỏ qua các bản bán đắt nhờ sticker, float hay pattern hiếm, vì chúng làm giá trung bình bị đẩy lên và tạo ra cơ hội giả. Item nào có ít hơn 5 lượt bán bản thường sẽ bị bỏ qua. Số lượt bán và xu hướng 7 ngày so với 30 ngày lấy từ dữ liệu theo ngày của CSFloat.
+- Mỗi lần chạy `daily` với CSFloat mất khoảng 7 phút, vì tool nghỉ 1 giây giữa mỗi lần gọi API (2 lần gọi cho mỗi item). Nếu sắp chạm giới hạn gọi API, tool tự dừng sớm và giữ phần dữ liệu đã lấy được.
 - Paper trade giả định bán được ngay ở giá rao thấp nhất. Thực tế có thể phải chờ lâu hơn.
 - Chưa so giá giữa các sàn. Phần này có thể thêm ở bản sau.
 

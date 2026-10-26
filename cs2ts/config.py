@@ -38,8 +38,8 @@ class Config:
     stop_loss: float = 0.20
 
     # CSFloat: how many of the most-listed items get a sales-history lookup
-    # each run, and the pause between lookups (seconds).
-    csfloat_universe_size: int = 300
+    # each run (two requests each), and the pause between requests (seconds).
+    csfloat_universe_size: int = 200
     csfloat_request_delay: float = 1.0
 
 

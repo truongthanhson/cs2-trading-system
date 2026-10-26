@@ -152,7 +152,7 @@
 
   <section class="card" id="history-card">
     <h2 id="history-title">Lịch sử giá</h2>
-    <div class="sub">Giá rao thấp nhất và trung vị 30 ngày, theo các ngày đã lưu.</div>
+    <div class="sub">Giá rao thấp nhất và giá mục tiêu (giá bán thường gặp), theo các ngày đã lưu.</div>
     <div class="chart" id="history-chart"></div>
     <div class="legend" id="history-legend"></div>
   </section>
@@ -319,7 +319,7 @@ async function showHistory(name) {
   const rows = await getJSON("/api/history?name=" + encodeURIComponent(name));
   const series = [
     {name: "Giá rao thấp nhất", color: "--series-1", values: rows.map((r) => r.min_price)},
-    {name: "Trung vị 30 ngày", color: "--series-2", values: rows.map((r) => r.median_30d)},
+    {name: "Giá mục tiêu", color: "--series-2", values: rows.map((r) => r.median_30d)},
   ];
   lineChart($("history-chart"), rows.map((r) => r.day), series, {
     label: "Lịch sử giá " + name,

@@ -197,14 +197,35 @@ class CsfloatTest(unittest.TestCase):
         self.assertEqual(s["volume_30d"], 90)
         self.assertEqual(s["volume_90d"], 90 + 50)
 
+    def test_fair_price_ignores_premium_copies(self):
+        sales = json.loads((FIXTURES / "csfloat_sales.json").read_text())
+        # The $38.10 and $2099 sales (stickers, rare pattern) are left out.
+        self.assertEqual(csfloat.fair_price(sales), 24.10)
+        self.assertIsNone(csfloat.fair_price(sales[:4]))
+
+    def test_build_row_uses_fair_price_not_graph_average(self):
+        graph = json.loads((FIXTURES / "csfloat_graph.json").read_text())
+        sales = json.loads((FIXTURES / "csfloat_sales.json").read_text())
+        item = {"market_hash_name": "AK-47 | Redline (Field-Tested)", "quantity": 900, "min_price": 2373}
+        r = csfloat.build_row(item, graph, sales, date(2026, 10, 26))
+        self.assertEqual(r["min_price"], 23.73)
+        self.assertEqual(r["median_30d"], 24.10)
+        # Graph trend: 7d median 3.55 vs 30d median 3.55 -> flat.
+        self.assertEqual(r["median_7d"], 24.10)
+        self.assertEqual(r["volume_30d"], 90)
+        # Buying at 23.73 to sell around 24.10 is not a deal.
+        self.assertIsNone(evaluate(r, Config()))
+
     def test_collect_stops_before_rate_limit(self):
         price_list = [{"market_hash_name": f"item {i}", "quantity": 100 - i, "min_price": 400}
                       for i in range(5)]
         graph = json.loads((FIXTURES / "csfloat_graph.json").read_text())
+        sales = json.loads((FIXTURES / "csfloat_sales.json").read_text())
         remaining = iter([200, 100, 25, 10, 5])
         cfg = Config(csfloat_universe_size=5)
         with mock.patch("cs2ts.csfloat.fetch_price_list", return_value=price_list), \
-             mock.patch("cs2ts.csfloat.fetch_graph", side_effect=lambda n: (graph, next(remaining))):
+             mock.patch("cs2ts.csfloat.fetch_graph", return_value=(graph, 300)), \
+             mock.patch("cs2ts.csfloat.fetch_sales", side_effect=lambda n: (sales, next(remaining))):
             rows = csfloat.collect(cfg, date(2026, 10, 26), sleep=lambda s: None, log=lambda m: None)
         self.assertEqual([r["name"] for r in rows], ["item 0", "item 1", "item 2"])
         self.assertEqual(rows[0]["min_price"], 4.0)

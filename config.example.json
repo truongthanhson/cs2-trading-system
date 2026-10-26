@@ -19,6 +19,6 @@
   "max_hold_days": 45,
   "stop_loss": 0.20,
 
-  "csfloat_universe_size": 300,
+  "csfloat_universe_size": 200,
   "csfloat_request_delay": 1.0
 }

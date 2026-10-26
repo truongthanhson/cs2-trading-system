@@ -5,12 +5,27 @@ The endpoints used here need no API key:
   every item, in one call.
 - /history/<name>/graph: one point per day with the average sale price
   (cents) and number of sales, newest first.
+- /history/<name>/sales: the last 40 sales, each with its price and
+  CSFloat's reference `base_price` for a plain copy of the item (cents).
 
-CSFloat has no bulk sales-history endpoint, so the graph is fetched per item
+Why two history calls per item: the graph's daily average includes premium
+copies (stickers, low float, rare patterns, Doppler phases), which sell far
+above an ordinary copy and drag the average up. Buying the cheapest listing
+and expecting it to resell at that average is a trap. So the price we expect
+to sell at (the "fair price") comes from recent sales of ordinary copies:
+sales priced within PREMIUM_CUTOFF of their own base_price. The graph is
+still used for sales volume and for the 7-day vs 30-day trend, where the
+premium skew roughly cancels out.
+
+In the snapshot rows, median_30d holds the fair price and median_7d holds
+the fair price scaled by the graph's 7d/30d trend, so the scanner's
+discount and momentum checks work unchanged.
+
+CSFloat has no bulk sales-history endpoint, so history is fetched per item
 for a shortlist (the "universe"): items in the configured price range with
-the most listings. The graph endpoint has its own rate limit (500 per window
-at the time of writing), so the collector watches the remaining-requests
-header and stops early instead of running into it.
+the most listings. The history endpoints have their own rate limit (500 per
+window at the time of writing), so the collector watches the
+remaining-requests header and stops early instead of running into it.
 """
 
 import statistics
@@ -23,24 +38,32 @@ import requests
 BASE_URL = "https://csfloat.com/api/v1"
 # Leave some headroom in the rate limit for manual use of the site.
 RATE_LIMIT_RESERVE = 25
+# A sale counts as an ordinary copy if it sold at most this much above its base price.
+PREMIUM_CUTOFF = 1.15
+# Fewer ordinary sales than this and the fair price is too noisy to trust.
+MIN_ORDINARY_SALES = 5
 
 
-def _get(path: str) -> requests.Response:
+def _get(path: str) -> tuple[object, int | None]:
     resp = requests.get(f"{BASE_URL}/{path}", timeout=60)
     resp.raise_for_status()
-    return resp
+    remaining = resp.headers.get("x-ratelimit-remaining")
+    return resp.json(), int(remaining) if remaining is not None else None
 
 
 def fetch_price_list() -> list[dict]:
     """[{market_hash_name, quantity, min_price (cents)}, ...] for every item."""
-    return _get("listings/price-list").json()
+    return _get("listings/price-list")[0]
 
 
 def fetch_graph(name: str) -> tuple[list[dict], int | None]:
     """Daily [{day, avg_price (cents), count}], plus remaining rate limit."""
-    resp = _get(f"history/{quote(name, safe='')}/graph")
-    remaining = resp.headers.get("x-ratelimit-remaining")
-    return resp.json(), int(remaining) if remaining is not None else None
+    return _get(f"history/{quote(name, safe='')}/graph")
+
+
+def fetch_sales(name: str) -> tuple[list[dict], int | None]:
+    """Last 40 sales [{price, sold_at, reference: {base_price}, ...}], plus remaining rate limit."""
+    return _get(f"history/{quote(name, safe='')}/sales")
 
 
 def pick_universe(price_list: list[dict], min_price: float, max_price: float,
@@ -52,6 +75,18 @@ def pick_universe(price_list: list[dict], min_price: float, max_price: float,
                 and (p.get("quantity") or 0) >= min_listings]
     eligible.sort(key=lambda p: p["quantity"], reverse=True)
     return eligible[:size]
+
+
+def fair_price(sales: list[dict]) -> float | None:
+    """Median price (USD) of recent sales of ordinary copies."""
+    ordinary = []
+    for s in sales:
+        base = (s.get("reference") or {}).get("base_price")
+        if s.get("price") and base and s["price"] <= base * PREMIUM_CUTOFF:
+            ordinary.append(s["price"] / 100)
+    if len(ordinary) < MIN_ORDINARY_SALES:
+        return None
+    return round(statistics.median(ordinary), 2)
 
 
 def summarize_graph(graph: list[dict], today: date) -> dict:
@@ -71,6 +106,22 @@ def summarize_graph(graph: list[dict], today: date) -> dict:
     return out
 
 
+def build_row(item: dict, graph: list[dict], sales: list[dict], today: date) -> dict:
+    g = summarize_graph(graph, today)
+    fair = fair_price(sales)
+    trend = g["median_7d"] / g["median_30d"] if g["median_7d"] and g["median_30d"] else None
+    return {
+        "name": item["market_hash_name"],
+        "min_price": item["min_price"] / 100,
+        "listings": item["quantity"],
+        "median_24h": g["median_24h"], "volume_24h": g["volume_24h"],
+        "median_7d": round(fair * trend, 2) if fair and trend else None,
+        "volume_7d": g["volume_7d"],
+        "median_30d": fair, "volume_30d": g["volume_30d"],
+        "median_90d": g["median_90d"], "volume_90d": g["volume_90d"],
+    }
+
+
 def collect(cfg, today: date | None = None, sleep=time.sleep, log=print) -> list[dict]:
     """Build snapshot rows (same shape as the Skinport collector) from CSFloat."""
     today = today or date.today()
@@ -83,15 +134,16 @@ def collect(cfg, today: date | None = None, sleep=time.sleep, log=print) -> list
     for i, item in enumerate(universe):
         name = item["market_hash_name"]
         try:
-            graph, remaining = fetch_graph(name)
+            graph, _ = fetch_graph(name)
+            sleep(cfg.csfloat_request_delay)
+            sales, remaining = fetch_sales(name)
         except requests.HTTPError as err:
             if err.response is not None and err.response.status_code == 429:
                 log(f"Rate limited after {i} items; keeping what we have.")
                 break
             log(f"Skipping {name}: {err}")
             continue
-        rows.append({"name": name, "min_price": item["min_price"] / 100,
-                     "listings": item["quantity"], **summarize_graph(graph, today)})
+        rows.append(build_row(item, graph, sales, today))
         if remaining is not None and remaining <= RATE_LIMIT_RESERVE:
             log(f"Rate limit nearly used up after {i + 1} items; stopping early.")
             break
