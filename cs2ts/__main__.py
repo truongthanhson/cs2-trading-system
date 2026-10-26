@@ -1,0 +1,118 @@
+"""Command line: python -m cs2ts <command>
+
+  collect   fetch today's Skinport prices and save a snapshot
+  scan      list current buy signals from the latest snapshot
+  paper     run one paper-trading step on the latest snapshot
+  report    show paper-trading profit and loss
+  daily     collect + paper + report (run this once a day)
+"""
+
+import argparse
+import csv
+import sys
+from datetime import date
+
+from . import paper, skinport
+from .collect import merge
+from .config import load_config
+from .db import connect, latest_day, save_snapshot, snapshot
+from .scan import scan
+
+
+def cmd_collect(conn, cfg, args):
+    items = skinport.fetch_items(cfg.currency)
+    history = skinport.fetch_sales_history(cfg.currency)
+    day = args.day or date.today().isoformat()
+    n = save_snapshot(conn, day, merge(items, history))
+    print(f"Saved {n} items for {day}.")
+
+
+def _require_day(conn):
+    day = latest_day(conn)
+    if day is None:
+        sys.exit("No snapshot yet. Run `python -m cs2ts collect` first.")
+    return day
+
+
+def cmd_scan(conn, cfg, args):
+    day = _require_day(conn)
+    signals = scan(snapshot(conn, day).values(), cfg)
+    print(f"{len(signals)} signals on {day}\n")
+    print(f"{'item':<55} {'buy':>8} {'target':>8} {'net':>7} {'roi':>6} {'disc':>6} {'mom':>6} {'vol30':>6}")
+    for s in signals[: args.top]:
+        print(f"{s.name[:55]:<55} {s.buy_price:>8.2f} {s.target_price:>8.2f} "
+              f"{s.net_profit:>7.2f} {s.net_roi:>6.1%} {s.discount:>6.1%} "
+              f"{s.momentum:>+6.1%} {s.volume_30d:>6}")
+    if args.csv:
+        with open(args.csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["name", "buy_price", "target_price", "net_profit", "net_roi",
+                        "discount", "momentum", "volume_30d", "listings"])
+            for s in signals:
+                w.writerow([s.name, s.buy_price, s.target_price, round(s.net_profit, 2),
+                            round(s.net_roi, 4), round(s.discount, 4),
+                            round(s.momentum, 4), s.volume_30d, s.listings])
+        print(f"\nWrote {args.csv}")
+
+
+def cmd_paper(conn, cfg, args):
+    day = _require_day(conn)
+    result = paper.step(conn, day, cfg)
+    for name, reason, pnl in result["sold"]:
+        print(f"SELL {name}  ({reason}, {pnl:+.2f})")
+    for name, price in result["bought"]:
+        print(f"BUY  {name}  @ {price:.2f}")
+    if not result["sold"] and not result["bought"]:
+        print("No paper trades today.")
+
+
+def cmd_report(conn, cfg, args):
+    day = latest_day(conn)
+    r = paper.report(conn, day, cfg)
+    win = f"{r['win_rate']:.0%}" if r["win_rate"] is not None else "-"
+    print(f"Paper account on {day}")
+    print(f"  Start budget    {cfg.paper_budget:>9.2f}")
+    print(f"  Equity          {r['equity']:>9.2f}  ({r['return_pct']:+.1%})")
+    print(f"  Realized P&L    {r['realized_pnl']:>+9.2f}  from {r['closed_trades']} trades, win rate {win}")
+    print(f"  Unrealized P&L  {r['unrealized_pnl']:>+9.2f}")
+    print(f"  Cash            {r['cash']:>9.2f}")
+    if r["open"]:
+        print("\n  Open positions")
+        for p in r["open"]:
+            print(f"    {p['name'][:50]:<50} bought {p['buy_price']:>7.2f} on {p['buy_day']}"
+                  f"  now {p['mark']:>7.2f} net  ({p['days_held']}d)")
+
+
+def cmd_daily(conn, cfg, args):
+    cmd_collect(conn, cfg, args)
+    cmd_paper(conn, cfg, args)
+    print()
+    cmd_report(conn, cfg, args)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="cs2ts", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--config", default="config.json")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    for name in ("collect", "daily"):
+        p = sub.add_parser(name)
+        p.add_argument("--day", help="override the snapshot date (YYYY-MM-DD)")
+    p = sub.add_parser("scan")
+    p.add_argument("--top", type=int, default=30)
+    p.add_argument("--csv", help="also write every signal to this CSV file")
+    sub.add_parser("paper")
+    sub.add_parser("report")
+
+    args = parser.parse_args(argv)
+    cfg = load_config(args.config)
+    conn = connect(cfg.db_path)
+    {
+        "collect": cmd_collect, "scan": cmd_scan, "paper": cmd_paper,
+        "report": cmd_report, "daily": cmd_daily,
+    }[args.command](conn, cfg, args)
+
+
+if __name__ == "__main__":
+    main()

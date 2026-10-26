@@ -1,0 +1,6 @@
+[
+  {"market_hash_name": "AK-47 | Slate (Field-Tested)", "currency": "USD", "suggested_price": 3.2, "item_page": "https://skinport.com/item/ak-47-slate-field-tested", "market_page": "https://skinport.com/market?item=Slate&cat=Rifle", "min_price": 2.6, "max_price": 9.0, "mean_price": 3.4, "median_price": 3.1, "quantity": 1200, "created_at": 1700000000, "updated_at": 1793000000},
+  {"market_hash_name": "M4A1-S | Black Lotus (Field-Tested)", "currency": "USD", "suggested_price": 8.1, "item_page": "", "market_page": "", "min_price": 6.0, "max_price": 20.0, "mean_price": 8.4, "median_price": 8.0, "quantity": 300, "created_at": 1700000000, "updated_at": 1793000000},
+  {"market_hash_name": "M9 Bayonet | Doppler (Factory New)", "currency": "USD", "suggested_price": 900.0, "item_page": "", "market_page": "", "min_price": 850.0, "max_price": 1500.0, "mean_price": 950.0, "median_price": 920.0, "quantity": 12, "created_at": 1700000000, "updated_at": 1793000000},
+  {"market_hash_name": "Sticker | Nobody (Holo)", "currency": "USD", "suggested_price": null, "item_page": "", "market_page": "", "min_price": 4.0, "max_price": 4.0, "mean_price": 4.0, "median_price": 4.0, "quantity": 1, "created_at": 1700000000, "updated_at": 1793000000}
+]
