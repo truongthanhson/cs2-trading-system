@@ -210,11 +210,20 @@ class CsfloatTest(unittest.TestCase):
         r = csfloat.build_row(item, graph, sales, date(2026, 10, 26))
         self.assertEqual(r["min_price"], 23.73)
         self.assertEqual(r["median_30d"], 24.10)
-        # Graph trend: 7d median 3.55 vs 30d median 3.55 -> flat.
+        # No earlier snapshots yet: no trend.
         self.assertEqual(r["median_7d"], 24.10)
         self.assertEqual(r["volume_30d"], 90)
         # Buying at 23.73 to sell around 24.10 is not a deal.
         self.assertIsNone(evaluate(r, Config()))
+
+    def test_trend_comes_from_own_fair_price_history(self):
+        graph = json.loads((FIXTURES / "csfloat_graph.json").read_text())
+        sales = json.loads((FIXTURES / "csfloat_sales.json").read_text())
+        item = {"market_hash_name": "x", "quantity": 900, "min_price": 2000}
+        r = csfloat.build_row(item, graph, sales, date(2026, 10, 26), [28.0, 27.5, 27.0])
+        # Fair price slid from ~28 to 24.10 over the week.
+        self.assertEqual(r["median_7d"], 27.25)
+        self.assertEqual(r["median_30d"], 24.10)
 
     def test_collect_stops_before_rate_limit(self):
         price_list = [{"market_hash_name": f"item {i}", "quantity": 100 - i, "min_price": 400}

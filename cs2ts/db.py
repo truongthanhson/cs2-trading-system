@@ -67,3 +67,14 @@ def latest_day(conn: sqlite3.Connection) -> str | None:
 def snapshot(conn: sqlite3.Connection, day: str) -> dict[str, sqlite3.Row]:
     rows = conn.execute("SELECT * FROM snapshots WHERE day = ?", (day,))
     return {r["name"]: r for r in rows}
+
+
+def recent_values(conn: sqlite3.Connection, column: str, since: str, before: str) -> dict[str, list[float]]:
+    """Per item, non-null values of a snapshot column for days in [since, before)."""
+    rows = conn.execute(
+        f"SELECT name, {column} FROM snapshots WHERE day >= ? AND day < ?"
+        f" AND {column} IS NOT NULL ORDER BY day", (since, before))
+    out: dict[str, list[float]] = {}
+    for name, value in rows:
+        out.setdefault(name, []).append(value)
+    return out

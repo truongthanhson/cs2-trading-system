@@ -103,7 +103,9 @@ Dữ liệu demo hoàn toàn ngẫu nhiên. Lãi/lỗ trong demo **không** nói
 
 - Giá rao thấp nhất có thể là món có float xấu hoặc pattern kém hơn các món khác cùng tên. Trước khi mua thật, luôn mở trang item để xem kỹ.
 - Với CSFloat, **giá mục tiêu** là trung vị giá bán của các bản "thường" trong 40 lượt bán gần nhất. Tool bỏ qua các bản bán đắt nhờ sticker, float hay pattern hiếm, vì chúng làm giá trung bình bị đẩy lên và tạo ra cơ hội giả. Item nào có ít hơn 5 lượt bán bản thường sẽ bị bỏ qua. Số lượt bán và xu hướng 7 ngày so với 30 ngày lấy từ dữ liệu theo ngày của CSFloat.
-- Mỗi lần chạy `daily` với CSFloat mất khoảng 7 phút, vì tool nghỉ 1 giây giữa mỗi lần gọi API (2 lần gọi cho mỗi item). Nếu sắp chạm giới hạn gọi API, tool tự dừng sớm và giữ phần dữ liệu đã lấy được.
+- **Xu hướng giá** (cột `mom`) được tính từ chính lịch sử giá mục tiêu mà tool lưu mỗi ngày. Vì vậy trong tuần đầu chưa có bộ lọc xu hướng; từ ngày thứ 7 trở đi bộ lọc mới đầy đủ.
+- Mỗi lần chạy `daily` với CSFloat mất khoảng 7 phút, vì tool nghỉ 1 giây giữa mỗi lần gọi API (2 lần gọi cho mỗi item).
+- CSFloat chỉ cho khoảng **500 lần gọi lịch sử mỗi 24 giờ**. Với `csfloat_universe_size` = 200, mỗi ngày tool dùng khoảng 400 lần, nên **chỉ chạy `daily` một lần mỗi ngày**. Nếu sắp hết lượt, tool tự dừng sớm. Nếu sắp chạm giới hạn gọi API, tool tự dừng sớm và giữ phần dữ liệu đã lấy được.
 - Paper trade giả định bán được ngay ở giá rao thấp nhất. Thực tế có thể phải chờ lâu hơn.
 - Chưa so giá giữa các sàn. Phần này có thể thêm ở bản sau.
 

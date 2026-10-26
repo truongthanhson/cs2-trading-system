@@ -12,19 +12,22 @@
 import argparse
 import csv
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 from . import csfloat, paper, skinport
 from .collect import merge
 from .config import load_config
-from .db import connect, latest_day, save_snapshot, snapshot
+from .db import connect, latest_day, recent_values, save_snapshot, snapshot
 from .scan import scan
 
 
 def cmd_collect(conn, cfg, args):
     day = args.day or date.today().isoformat()
     if cfg.source == "csfloat":
-        rows = csfloat.collect(cfg, date.fromisoformat(day))
+        today = date.fromisoformat(day)
+        since = (today - timedelta(days=6)).isoformat()
+        past = recent_values(conn, "median_30d", since, day)
+        rows = csfloat.collect(cfg, today, past_fair=past)
     elif cfg.source == "skinport":
         rows = merge(skinport.fetch_items(cfg.currency), skinport.fetch_sales_history(cfg.currency))
     else:

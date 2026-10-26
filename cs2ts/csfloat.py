@@ -14,12 +14,16 @@ above an ordinary copy and drag the average up. Buying the cheapest listing
 and expecting it to resell at that average is a trap. So the price we expect
 to sell at (the "fair price") comes from recent sales of ordinary copies:
 sales priced within PREMIUM_CUTOFF of their own base_price. The graph is
-still used for sales volume and for the 7-day vs 30-day trend, where the
-premium skew roughly cancels out.
+still used for sales volume.
 
-In the snapshot rows, median_30d holds the fair price and median_7d holds
-the fair price scaled by the graph's 7d/30d trend, so the scanner's
-discount and momentum checks work unchanged.
+The graph's daily average is still skewed by premium copies, so it is too
+noisy for a trend (a few sticker crafts can move it 40%). The trend instead
+comes from our own history of fair prices, saved with every daily snapshot.
+
+In the snapshot rows, median_30d holds today's fair price and median_7d
+holds the median fair price over our last 7 snapshot days, so the scanner's
+discount and momentum checks work unchanged. Until a week of snapshots has
+built up, median_7d equals today's fair price (no trend filter).
 
 CSFloat has no bulk sales-history endpoint, so history is fetched per item
 for a shortlist (the "universe"): items in the configured price range with
@@ -106,24 +110,31 @@ def summarize_graph(graph: list[dict], today: date) -> dict:
     return out
 
 
-def build_row(item: dict, graph: list[dict], sales: list[dict], today: date) -> dict:
+def build_row(item: dict, graph: list[dict], sales: list[dict], today: date,
+              past_fair: list[float] = ()) -> dict:
+    """past_fair: this item's fair prices from earlier snapshots in the last 6 days."""
     g = summarize_graph(graph, today)
     fair = fair_price(sales)
-    trend = g["median_7d"] / g["median_30d"] if g["median_7d"] and g["median_30d"] else None
+    recent = [*past_fair, fair] if fair else []
     return {
         "name": item["market_hash_name"],
         "min_price": item["min_price"] / 100,
         "listings": item["quantity"],
         "median_24h": g["median_24h"], "volume_24h": g["volume_24h"],
-        "median_7d": round(fair * trend, 2) if fair and trend else None,
+        "median_7d": round(statistics.median(recent), 2) if recent else None,
         "volume_7d": g["volume_7d"],
         "median_30d": fair, "volume_30d": g["volume_30d"],
         "median_90d": g["median_90d"], "volume_90d": g["volume_90d"],
     }
 
 
-def collect(cfg, today: date | None = None, sleep=time.sleep, log=print) -> list[dict]:
-    """Build snapshot rows (same shape as the Skinport collector) from CSFloat."""
+def collect(cfg, today: date | None = None, sleep=time.sleep, log=print,
+            past_fair: dict[str, list[float]] | None = None) -> list[dict]:
+    """Build snapshot rows (same shape as the Skinport collector) from CSFloat.
+
+    past_fair maps item name to its fair prices from the previous 6 days.
+    """
+    past_fair = past_fair or {}
     today = today or date.today()
     price_list = fetch_price_list()
     universe = pick_universe(price_list, cfg.min_price, cfg.max_price,
@@ -143,7 +154,7 @@ def collect(cfg, today: date | None = None, sleep=time.sleep, log=print) -> list
                 break
             log(f"Skipping {name}: {err}")
             continue
-        rows.append(build_row(item, graph, sales, today))
+        rows.append(build_row(item, graph, sales, today, past_fair.get(name, [])))
         if remaining is not None and remaining <= RATE_LIMIT_RESERVE:
             log(f"Rate limit nearly used up after {i + 1} items; stopping early.")
             break
