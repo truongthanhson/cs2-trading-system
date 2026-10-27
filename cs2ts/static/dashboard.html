@@ -146,7 +146,7 @@
 
   <section class="card">
     <h2>Cơ hội hôm nay</h2>
-    <div class="sub">Item rao bán rẻ hơn trung vị 30 ngày, bán chạy, không đang rơi giá và còn lời sau phí. Bấm vào một dòng để xem lịch sử giá.</div>
+    <div class="sub">Item rao bán rẻ hơn giá mục tiêu, bán chạy, không đang rơi giá và còn lời sau phí. Bấm vào một dòng để xem lịch sử giá.</div>
     <div class="table-wrap" id="signals-table"></div>
   </section>
 
@@ -155,6 +155,13 @@
     <div class="sub">Giá rao thấp nhất và giá mục tiêu (giá bán thường gặp), theo các ngày đã lưu.</div>
     <div class="chart" id="history-chart"></div>
     <div class="legend" id="history-legend"></div>
+  </section>
+
+  <section class="card">
+    <h2>Đang theo dõi</h2>
+    <div class="sub">Tất cả item tool kiểm tra trong lần chạy gần nhất, món gần đạt tiêu chí mua nhất ở trên. Cột "Tình trạng" cho biết item còn thiếu điều kiện nào. Bấm vào một dòng để xem lịch sử giá.</div>
+    <div class="table-wrap" id="watch-table"></div>
+    <button id="watch-more" type="button" hidden style="margin-top:10px"></button>
   </section>
 </main>
 
@@ -312,6 +319,27 @@ function table(el, headers, rows, opts = {}) {
 
 const pnlCell = (v) => `<span class="${trendClass(v)}">${signed(v, usd)}</span>`;
 const reasonLabel = {target: "chạm mục tiêu", stop_loss: "cắt lỗ", max_hold: "giữ quá lâu"};
+const failLabel = {discount: "chưa đủ rẻ", roi: "lãi thấp", falling: "đang rớt giá", liquidity: "ít giao dịch", price_range: "ngoài khoảng giá"};
+const WATCH_PAGE = 30;
+let watchShowAll = false;
+
+function renderWatch(watch) {
+  const rows = watchShowAll ? watch : watch.slice(0, WATCH_PAGE);
+  table($("watch-table"), ["Item", "Giá rao", "Mục tiêu", "Rẻ hơn", "ROI sau phí", "Xu hướng", "Bán 30 ngày", "Tình trạng"],
+    rows.map((w) => [esc(w.name), usd(w.buy_price), usd(w.target_price),
+      `<span class="${trendClass(w.discount)}">${signed(w.discount, pct)}</span>`, signed(w.net_roi, pct),
+      `<span class="${trendClass(w.momentum)}">${signed(w.momentum, pct)}</span>`, w.volume_30d,
+      w.failed.length ? `<span class="muted">${w.failed.map((f) => failLabel[f] || f).join(", ")}</span>` : "<b>✓ đạt</b>"]),
+    {empty: "Chưa có dữ liệu.", onClick: (i) => {
+      historyName = rows[i].name;
+      showHistory(historyName);
+      $("history-card").scrollIntoView({behavior: "smooth", block: "start"});
+    }});
+  const more = $("watch-more");
+  more.hidden = watch.length <= WATCH_PAGE;
+  more.textContent = watchShowAll ? "Thu gọn" : `Hiện tất cả (${watch.length})`;
+  more.onclick = () => { watchShowAll = !watchShowAll; renderWatch(watch); };
+}
 
 /* ---------- Price history ---------- */
 async function showHistory(name) {
@@ -333,8 +361,9 @@ async function showHistory(name) {
 let historyName = null;
 
 async function load() {
-  const [summary, equity, signals] = await Promise.all([
+  const [summary, equity, signals, watch] = await Promise.all([
     getJSON("/api/summary"), getJSON("/api/equity"), getJSON("/api/signals?limit=100"),
+    getJSON("/api/watchlist"),
   ]);
 
   $("asof").textContent = summary.day
@@ -367,7 +396,9 @@ async function load() {
       pct(s.discount), `<span class="${trendClass(s.momentum)}">${signed(s.momentum, pct)}</span>`, s.volume_30d]),
     {empty: "Không có cơ hội nào đạt tiêu chí hôm nay.", onClick: (i) => { historyName = signals[i].name; showHistory(historyName); }});
 
-  const first = historyName || summary.open[0]?.name || signals[0]?.name;
+  renderWatch(watch);
+
+  const first = historyName || summary.open[0]?.name || signals[0]?.name || watch[0]?.name;
   if (first) {
     historyName = first;
     showHistory(first);

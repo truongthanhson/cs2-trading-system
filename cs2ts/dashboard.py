@@ -15,7 +15,7 @@ from . import paper
 from .config import Config
 from .db import connect, latest_day, snapshot
 from .demo import DEMO_DB
-from .scan import scan
+from .scan import scan, watchlist
 
 
 def api_summary(conn: sqlite3.Connection, cfg: Config, query: dict) -> dict:
@@ -37,6 +37,13 @@ def api_signals(conn, cfg, query):
     return [asdict(s) for s in scan(snapshot(conn, day).values(), cfg)[:limit]]
 
 
+def api_watchlist(conn, cfg, query):
+    day = latest_day(conn)
+    if day is None:
+        return []
+    return watchlist(snapshot(conn, day).values(), cfg)
+
+
 def api_history(conn, cfg, query):
     name = query.get("name", [""])[0]
     rows = conn.execute(
@@ -49,6 +56,7 @@ ROUTES = {
     "/api/summary": api_summary,
     "/api/equity": api_equity,
     "/api/signals": api_signals,
+    "/api/watchlist": api_watchlist,
     "/api/history": api_history,
 }
 

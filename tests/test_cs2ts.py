@@ -70,6 +70,16 @@ class ScanTest(unittest.TestCase):
     def test_missing_data_is_skipped(self):
         self.assertIsNone(evaluate(row(m30=None), self.cfg))
 
+    def test_watchlist_names_failed_filters(self):
+        from cs2ts.scan import watchlist
+        rows = [row("deal", price=8.0), row("close", price=9.2), row("falling", price=8.0, m7=8.5),
+                row("empty", m30=None)]
+        w = {x["name"]: x for x in watchlist(rows, self.cfg)}
+        self.assertEqual(list(w), ["deal", "falling", "close"])
+        self.assertEqual(w["deal"]["failed"], [])
+        self.assertEqual(w["close"]["failed"], ["discount", "roi"])
+        self.assertEqual(w["falling"]["failed"], ["falling"])
+
     def test_sorted_by_roi(self):
         rows = [row("a", price=8.0), row("b", price=6.0), row("c", price=9.5)]
         self.assertEqual([s.name for s in scan(rows, self.cfg)], ["b", "a"])
@@ -167,6 +177,9 @@ class DashboardTest(unittest.TestCase):
                 self.assertEqual([p["name"] for p in summary["open"]], ["a"])
                 self.assertEqual(len(json.loads(get("/api/equity"))), 1)
                 self.assertEqual([s["name"] for s in json.loads(get("/api/signals"))], ["a"])
+                watch = json.loads(get("/api/watchlist"))
+                self.assertEqual([(w["name"], w["failed"]) for w in watch],
+                                 [("a", []), ("b", ["discount", "roi"])])
                 history = json.loads(get("/api/history?name=a"))
                 self.assertEqual(history[0]["min_price"], 8.0)
             finally:

@@ -5,7 +5,7 @@ near the 30-day median. An item only counts if the profit survives the sell
 fee and the item is liquid enough to sell again.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from .config import Config
 
@@ -23,35 +23,55 @@ class Signal:
     listings: int
 
 
-def evaluate(row, cfg: Config) -> Signal | None:
+def check(row, cfg: Config) -> tuple[Signal | None, list[str]]:
+    """The item's numbers and the names of the filters it fails.
+
+    Returns (None, ["no_data"]) when there are no prices to compute from.
+    """
     price, m7, m30 = row["min_price"], row["median_7d"], row["median_30d"]
     if not price or not m7 or not m30:
-        return None
-    if not cfg.min_price <= price <= cfg.max_price:
-        return None
-    if row["volume_30d"] < cfg.min_volume_30d or row["listings"] < cfg.min_listings:
-        return None
+        return None, ["no_data"]
 
     discount = 1 - price / m30
     momentum = m7 / m30 - 1
     net_profit = m30 * (1 - cfg.sell_fee) - price
     net_roi = net_profit / price
-
-    if discount < cfg.min_discount:
-        return None
-    # A cheap listing on an item that is falling is a trap, not a deal.
-    if momentum < -cfg.max_momentum_drop:
-        return None
-    if net_roi < cfg.min_net_roi:
-        return None
-
-    return Signal(
+    sig = Signal(
         name=row["name"], buy_price=price, target_price=m30,
         net_profit=net_profit, net_roi=net_roi, discount=discount,
         momentum=momentum, volume_30d=row["volume_30d"], listings=row["listings"],
     )
 
+    failed = []
+    if not cfg.min_price <= price <= cfg.max_price:
+        failed.append("price_range")
+    if row["volume_30d"] < cfg.min_volume_30d or row["listings"] < cfg.min_listings:
+        failed.append("liquidity")
+    if discount < cfg.min_discount:
+        failed.append("discount")
+    # A cheap listing on an item that is falling is a trap, not a deal.
+    if momentum < -cfg.max_momentum_drop:
+        failed.append("falling")
+    if net_roi < cfg.min_net_roi:
+        failed.append("roi")
+    return sig, failed
+
+
+def evaluate(row, cfg: Config) -> Signal | None:
+    sig, failed = check(row, cfg)
+    return None if failed else sig
+
 
 def scan(rows, cfg: Config) -> list[Signal]:
     signals = [s for r in rows if (s := evaluate(r, cfg))]
     return sorted(signals, key=lambda s: s.net_roi, reverse=True)
+
+
+def watchlist(rows, cfg: Config) -> list[dict]:
+    """Every item with prices, closest to a buy signal (largest discount) first."""
+    out = []
+    for r in rows:
+        sig, failed = check(r, cfg)
+        if sig:
+            out.append({**asdict(sig), "failed": failed})
+    return sorted(out, key=lambda w: w["discount"], reverse=True)
