@@ -22,7 +22,8 @@ import requests
 BASE_URL = "https://api.csmarketapi.com/v2"
 # Never let a daily run drain the monthly quota below this.
 CREDIT_RESERVE = 500
-SKIP_SALES_MARKETS = {"CSFLOAT", "DMARKET", "STEAM"}
+# Steam is listed as STEAMCOMMUNITY; SIH data also comes from the Steam market.
+SKIP_SALES_MARKETS = {"CSFLOAT", "DMARKET", "STEAM", "STEAMCOMMUNITY", "SIH"}
 ASK_MARKETS = ("BUFF163", "YOUPIN")
 
 

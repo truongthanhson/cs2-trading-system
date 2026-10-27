@@ -326,7 +326,8 @@ class FakeHttp:
             self.credits -= 1
             data = {"market_hash_name": name, "sales": [
                 {"market": "CSFLOAT", "mean_price": 99.0, "median_price": None, "volume": 50},
-                {"market": "STEAM", "median_price": 12.0, "volume": 500},
+                {"market": "STEAMCOMMUNITY", "median_price": 12.0, "volume": 500},
+                {"market": "SIH", "median_price": 11.5, "volume": 400},
                 {"market": "SKINPORT", "median_price": 9.0, "volume": 10},
                 {"market": "MARKETCSGO", "median_price": 9.5, "volume": 30},
             ]}
