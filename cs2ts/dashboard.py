@@ -88,7 +88,7 @@ def make_handler(cfg: Config):
 
 def serve(cfg: Config, host: str = "127.0.0.1", port: int = 8000) -> None:
     server = ThreadingHTTPServer((host, port), make_handler(cfg))
-    print(f"Dashboard: http://{host}:{port}  (Ctrl+C to stop)")
+    print(f"Dashboard: http://{host}:{port}  (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

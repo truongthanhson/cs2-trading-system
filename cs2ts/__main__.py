@@ -7,6 +7,7 @@
   daily     collect + paper + report (run this once a day)
   dashboard open the web dashboard on http://localhost:8000
   demo      write fake data to try the dashboard (dashboard --demo)
+  serve     dashboard + run `daily` every day at --daily-at (for servers)
 """
 
 import argparse
@@ -99,6 +100,28 @@ def cmd_daily(conn, cfg, args):
     cmd_report(conn, cfg, args)
 
 
+def cmd_serve(cfg, args):
+    from . import scheduler
+    from .dashboard import serve
+
+    def job():
+        conn = connect(cfg.db_path)
+        try:
+            cmd_daily(conn, cfg, argparse.Namespace(day=None))
+        finally:
+            conn.close()
+
+    def already_done(day):
+        conn = connect(cfg.db_path)
+        try:
+            return latest_day(conn) == day
+        finally:
+            conn.close()
+
+    scheduler.start(job, already_done, args.daily_at)
+    serve(cfg, host=args.host, port=args.port)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="cs2ts", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -114,9 +137,14 @@ def main(argv=None):
     sub.add_parser("paper")
     sub.add_parser("report")
     p = sub.add_parser("dashboard")
+    p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--demo", action="store_true", help="show the fake data from `demo`")
     sub.add_parser("demo")
+    p = sub.add_parser("serve")
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--daily-at", default="12:15", help="local time HH:MM for the daily run")
 
     args = parser.parse_args(argv)
     cfg = load_config(args.config)
@@ -129,7 +157,10 @@ def main(argv=None):
         from dataclasses import replace
         from .dashboard import serve
         from .demo import DEMO_DB
-        return serve(replace(cfg, db_path=DEMO_DB) if args.demo else cfg, port=args.port)
+        return serve(replace(cfg, db_path=DEMO_DB) if args.demo else cfg,
+                     host=args.host, port=args.port)
+    if args.command == "serve":
+        return cmd_serve(cfg, args)
     conn = connect(cfg.db_path)
     try:
         {

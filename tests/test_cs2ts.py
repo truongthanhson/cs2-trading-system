@@ -248,6 +248,25 @@ class CsfloatTest(unittest.TestCase):
         self.assertEqual(rows[0]["volume_30d"], 90)
 
 
+class SchedulerTest(unittest.TestCase):
+    def test_next_run(self):
+        from datetime import datetime
+        from cs2ts.scheduler import next_run
+        self.assertEqual(next_run(datetime(2026, 10, 27, 9, 0), "12:15"), datetime(2026, 10, 27, 12, 15))
+        self.assertEqual(next_run(datetime(2026, 10, 27, 12, 15), "12:15"), datetime(2026, 10, 28, 12, 15))
+
+    def test_run_once_skips_when_done_and_survives_errors(self):
+        from cs2ts.scheduler import run_once
+        calls, logs = [], []
+        run_once(lambda: calls.append(1), lambda day: True, logs.append)
+        self.assertEqual(calls, [])
+
+        def boom():
+            raise RuntimeError("api down")
+        run_once(boom, lambda day: False, logs.append)
+        self.assertIn("api down", logs[-1])
+
+
 class CliTest(unittest.TestCase):
     def test_daily_with_mocked_api(self):
         items = json.loads((FIXTURES / "items.json").read_text())

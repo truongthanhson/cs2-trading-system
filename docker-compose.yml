@@ -1,0 +1,13 @@
+services:
+  cs2ts:
+    build: .
+    container_name: cs2ts
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      DAILY_AT: "12:15"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./config.json:/app/config.json

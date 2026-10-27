@@ -62,6 +62,20 @@ python -m cs2ts dashboard --demo
 
 Dữ liệu demo hoàn toàn ngẫu nhiên. Lãi/lỗ trong demo **không** nói lên điều gì về chiến lược.
 
+## Chạy trên server bằng Docker
+
+Container chạy dashboard ở cổng 8000 và tự chạy `daily` mỗi ngày lúc 12:15 (giờ Việt Nam). Dữ liệu nằm trong thư mục `data/` trên máy chủ, nên vẫn giữ nguyên khi cập nhật hay khởi động lại container.
+
+```bash
+cp config.example.json config.json   # bắt buộc trước lần chạy đầu
+docker compose up -d --build
+docker compose logs -f               # xem log của các lần chạy hằng ngày
+```
+
+- Đổi giờ chạy: sửa `DAILY_AT` trong `docker-compose.yml`.
+- Nếu container khởi động lại trong ngày mà hôm đó đã có dữ liệu, tool sẽ không chạy lại, để tiết kiệm lượt gọi API của CSFloat.
+- Cập nhật code: chép code mới lên server rồi chạy lại `docker compose up -d --build`.
+
 ## Đọc kết quả `scan`
 
 | Cột | Ý nghĩa |
