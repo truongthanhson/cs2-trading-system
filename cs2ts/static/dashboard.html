@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS2 Trading Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f5f4f1;
+    --surface-1: #fcfcfb;
+    --border: #e4e2dc;
+    --grid: #ecebe7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #7a7974;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --good: #0ca30c;
+    --critical: #d03b3b;
+    --row-hover: #f0efec;
+    --row-active: #e3edf9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0: #121211;
+      --surface-1: #1a1a19;
+      --border: #2e2e2c;
+      --grid: #262624;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8e8d86;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --row-hover: #232322;
+      --row-active: #1d2c40;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --border: #2e2e2c;
+    --grid: #262624;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8e8d86;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --row-hover: #232322;
+    --row-active: #1d2c40;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); font-size: 13px; }
+  .muted { color: var(--text-muted); }
+  button {
+    font: inherit; color: var(--text-secondary); background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 20px 0; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .kpi .label { color: var(--text-secondary); font-size: 12px; }
+  .kpi .value { font-size: 24px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .kpi .note { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; min-width: 0; }
+  .banner { background: var(--row-active); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-top: 16px; }
+
+  .chart { position: relative; margin-top: 12px; }
+  .chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+  .chart text { fill: var(--text-muted); font-size: 11px; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none; z-index: 2;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap;
+  }
+  .tooltip .t-day { color: var(--text-secondary); margin-bottom: 4px; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .swatch { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-top: 8px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .empty { color: var(--text-muted); padding: 28px 0; text-align: center; }
+
+  .table-wrap { overflow-x: auto; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 500; font-size: 12px; }
+  th:first-child, td:first-child { text-align: left; }
+  td.name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.clickable:hover { background: var(--row-hover); }
+  tbody tr.active { background: var(--row-active); }
+  .up::before { content: "▲ "; color: var(--good); font-size: 10px; }
+  .down::before { content: "▼ "; color: var(--critical); font-size: 10px; }
+  details { margin-top: 10px; font-size: 13px; }
+  summary { cursor: pointer; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>CS2 Trading Dashboard</h1>
+      <div class="sub" id="asof">Đang tải…</div>
+    </div>
+    <div style="display:flex; gap:8px">
+      <button id="refresh" type="button">Tải lại</button>
+      <button id="theme" type="button">Giao diện sáng/tối</button>
+    </div>
+  </header>
+
+  <div class="banner" id="demo-banner" hidden><b>Dữ liệu giả.</b> Đây là dữ liệu mẫu từ lệnh <code>demo</code>, chỉ để xem thử giao diện. Các con số không có ý nghĩa.</div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="card">
+    <h2>Giá trị tài khoản paper trade</h2>
+    <div class="sub">Tiền mặt + giá trị các vị thế đang giữ (đã trừ phí bán), theo từng ngày chạy <code>daily</code>. Đường gạch là vốn ban đầu.</div>
+    <div class="chart" id="equity-chart"></div>
+    <details><summary>Xem dạng bảng</summary><div class="table-wrap" id="equity-table"></div></details>
+  </section>
+
+  <section class="card">
+      <h2>Vị thế đang giữ</h2>
+      <div class="sub">Chưa bán được trong 7 ngày đầu do khóa trade.</div>
+      <div class="table-wrap" id="open-table"></div>
+    </section>
+    <section class="card">
+      <h2>Lệnh đã đóng</h2>
+      <div class="sub">Mới nhất ở trên.</div>
+      <div class="table-wrap" id="closed-table"></div>
+    </section>
+
+  <section class="card">
+    <h2>Cơ hội hôm nay</h2>
+    <div class="sub">Item rao bán rẻ hơn giá mục tiêu, bán chạy, không đang rơi giá và còn lời sau phí. Bấm vào một dòng để xem lịch sử giá.</div>
+    <div class="table-wrap" id="signals-table"></div>
+  </section>
+
+  <section class="card" id="history-card">
+    <h2 id="history-title">Lịch sử giá</h2>
+    <div class="sub">Giá rao thấp nhất và giá mục tiêu (giá bán thường gặp), theo các ngày đã lưu.</div>
+    <div class="chart" id="history-chart"></div>
+    <div class="legend" id="history-legend"></div>
+  </section>
+
+  <section class="card">
+    <h2>Đang theo dõi</h2>
+    <div class="sub">Tất cả item tool kiểm tra trong lần chạy gần nhất, món gần đạt tiêu chí mua nhất ở trên. Cột "Tình trạng" cho biết item còn thiếu điều kiện nào. Bấm vào một dòng để xem lịch sử giá.</div>
+    <div class="table-wrap" id="watch-table"></div>
+    <button id="watch-more" type="button" hidden style="margin-top:10px"></button>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const usd = (v) => v == null ? "–" : "$" + v.toFixed(2);
+const pct = (v) => v == null ? "–" : (v * 100).toFixed(1) + "%";
+const signed = (v, fmt) => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v));
+const trendClass = (v) => v > 0 ? "up" : v < 0 ? "down" : "";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(url + " " + res.status);
+  return res.json();
+}
+
+/* ---------- KPI tiles ---------- */
+function renderKpis(s) {
+  const tiles = [
+    ["Giá trị tài khoản", usd(s.equity), `<span class="${trendClass(s.return_pct)}">${signed(s.return_pct, pct)}</span> so với vốn ${usd(s.budget)}`],
+    ["Lãi đã chốt", `<span class="${trendClass(s.realized_pnl)}">${signed(s.realized_pnl, usd)}</span>`, `${s.closed_trades} lệnh đã đóng`],
+    ["Lãi tạm tính", `<span class="${trendClass(s.unrealized_pnl)}">${signed(s.unrealized_pnl, usd)}</span>`, `${s.open.length} vị thế đang giữ`],
+    ["Tỉ lệ thắng", s.win_rate == null ? "–" : pct(s.win_rate), "trên các lệnh đã đóng"],
+    ["Tiền mặt", usd(s.cash), "sẵn sàng để mua"],
+  ];
+  $("kpis").innerHTML = tiles.map(([label, value, note]) =>
+    `<div class="kpi"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`
+  ).join("");
+}
+
+/* ---------- Line chart with crosshair tooltip ---------- */
+function lineChart(el, days, series, opts = {}) {
+  el.innerHTML = "";
+  if (days.length === 0) {
+    el.innerHTML = `<div class="empty">${opts.empty || "Chưa có dữ liệu."}</div>`;
+    return;
+  }
+  const W = el.clientWidth || 600, H = 260;
+  const m = {top: 12, right: 16, bottom: 26, left: 52};
+  const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+
+  const values = series.flatMap((s) => s.values).filter((v) => v != null);
+  if (opts.reference != null) values.push(opts.reference);
+  let lo = Math.min(...values), hi = Math.max(...values);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  // Round the axis to a "nice" step (1, 2 or 5 x 10^n) so tick labels read cleanly.
+  const raw = (hi - lo) / 4, mag = 10 ** Math.floor(Math.log10(raw));
+  const tick = [1, 2, 5, 10].map((k) => k * mag).find((k) => k >= raw);
+  lo = Math.floor(lo / tick) * tick; hi = Math.ceil(hi / tick) * tick;
+  const ticks = [];
+  for (let v = lo; v <= hi + tick / 2; v += tick) ticks.push(v);
+
+  const x = (i) => m.left + (days.length === 1 ? iw / 2 : (i / (days.length - 1)) * iw);
+  const y = (v) => m.top + ih - ((v - lo) / (hi - lo)) * ih;
+
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", opts.label || "line chart");
+  const add = (tag, attrs, parent = svg) => {
+    const n = document.createElementNS(ns, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    parent.appendChild(n);
+    return n;
+  };
+
+  // Recessive grid with 4 y ticks.
+  for (const v of ticks) {
+    const yy = y(v);
+    add("line", {x1: m.left, x2: W - m.right, y1: yy, y2: yy, stroke: css("--grid"), "stroke-width": 1});
+    add("text", {x: m.left - 8, y: yy + 4, "text-anchor": "end"}).textContent = "$" + v.toFixed(tick < 1 ? 2 : 0);
+  }
+  // A handful of x labels.
+  const step = Math.max(1, Math.ceil(days.length / 6));
+  days.forEach((d, i) => {
+    if (i % step === 0 || i === days.length - 1)
+      add("text", {x: x(i), y: H - 6, "text-anchor": "middle"}).textContent = d.slice(5);
+  });
+
+  if (opts.reference != null) {
+    add("line", {x1: m.left, x2: W - m.right, y1: y(opts.reference), y2: y(opts.reference),
+                 stroke: css("--text-muted"), "stroke-width": 1, "stroke-dasharray": "4 4"});
+  }
+
+  series.forEach((s) => {
+    const color = css(s.color);
+    let d = "", pen = false;
+    s.values.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += (pen ? "L" : "M") + x(i) + "," + y(v);
+      pen = true;
+    });
+    add("path", {d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"});
+    if (days.length === 1 && s.values[0] != null)
+      add("circle", {cx: x(0), cy: y(s.values[0]), r: 4, fill: color});
+  });
+
+  // Hover layer.
+  const cross = add("line", {y1: m.top, y2: m.top + ih, stroke: css("--text-muted"), "stroke-width": 1, visibility: "hidden"});
+  const dots = series.map((s) => add("circle", {r: 4.5, fill: css(s.color), stroke: css("--surface-1"), "stroke-width": 2, visibility: "hidden"}));
+  const hit = add("rect", {x: m.left, y: m.top, width: iw, height: ih, fill: "transparent"});
+  el.appendChild(svg);
+  const tip = document.createElement("div");
+  tip.className = "tooltip";
+  el.appendChild(tip);
+
+  const show = (evt) => {
+    const box = svg.getBoundingClientRect();
+    const px = ((evt.clientX - box.left) / box.width) * W;
+    const i = days.length === 1 ? 0 : Math.max(0, Math.min(days.length - 1, Math.round(((px - m.left) / iw) * (days.length - 1))));
+    const cx = x(i);
+    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+    series.forEach((s, k) => {
+      const v = s.values[i];
+      if (v == null) { dots[k].setAttribute("visibility", "hidden"); return; }
+      dots[k].setAttribute("cx", cx); dots[k].setAttribute("cy", y(v)); dots[k].setAttribute("visibility", "visible");
+    });
+    tip.innerHTML = `<div class="t-day">${days[i]}</div>` + series.map((s) =>
+      `<div class="t-row"><span class="swatch" style="background:${css(s.color)}"></span>${esc(s.name)}: <b>${usd(s.values[i])}</b></div>`
+    ).join("") + (opts.extra ? opts.extra(i) : "");
+    tip.style.display = "block";
+    const left = (cx / W) * box.width;
+    tip.style.left = Math.min(left + 12, box.width - tip.offsetWidth) + "px";
+    tip.style.top = "8px";
+  };
+  hit.addEventListener("mousemove", show);
+  hit.addEventListener("mouseleave", () => {
+    tip.style.display = "none";
+    cross.setAttribute("visibility", "hidden");
+    dots.forEach((d) => d.setAttribute("visibility", "hidden"));
+  });
+}
+
+/* ---------- Tables ---------- */
+function table(el, headers, rows, opts = {}) {
+  if (rows.length === 0) {
+    el.innerHTML = `<div class="empty">${opts.empty || "Không có dữ liệu."}</div>`;
+    return;
+  }
+  el.innerHTML = `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map((r, i) => `<tr data-i="${i}" class="${opts.onClick ? "clickable" : ""}">${r.map((c, j) =>
+      `<td${j === 0 ? ' class="name"' : ""}>${c}</td>`).join("")}</tr>`).join("") +
+    "</tbody></table>";
+  if (opts.onClick) {
+    el.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => {
+      el.querySelectorAll("tr.active").forEach((a) => a.classList.remove("active"));
+      tr.classList.add("active");
+      opts.onClick(+tr.dataset.i);
+    }));
+  }
+}
+
+const pnlCell = (v) => `<span class="${trendClass(v)}">${signed(v, usd)}</span>`;
+const reasonLabel = {target: "chạm mục tiêu", stop_loss: "cắt lỗ", max_hold: "giữ quá lâu"};
+const failLabel = {discount: "chưa đủ rẻ", roi: "lãi thấp", falling: "đang rớt giá", liquidity: "ít giao dịch", price_range: "ngoài khoảng giá", ref_gap: "sàn khác bán rẻ hơn", cheaper_elsewhere: "Buff/YouPin rao rẻ hơn", phase: "giá theo phase (Doppler)"};
+const optUsd = (v) => v == null ? `<span class="muted">–</span>` : usd(v);
+const WATCH_PAGE = 30;
+let watchShowAll = false;
+
+function renderWatch(watch) {
+  const rows = watchShowAll ? watch : watch.slice(0, WATCH_PAGE);
+  table($("watch-table"), ["Item", "Giá rao", "Mục tiêu", "Bán sàn khác", "Buff", "YouPin", "Rẻ hơn", "ROI sau phí", "Xu hướng", "Bán 30 ngày", "Tình trạng"],
+    rows.map((w) => [esc(w.name), usd(w.buy_price), usd(w.target_price),
+      optUsd(w.ref_median), optUsd(w.buff_ask), optUsd(w.youpin_ask),
+      `<span class="${trendClass(w.discount)}">${signed(w.discount, pct)}</span>`, signed(w.net_roi, pct),
+      `<span class="${trendClass(w.momentum)}">${signed(w.momentum, pct)}</span>`, w.volume_30d,
+      w.failed.length ? `<span class="muted">${w.failed.map((f) => failLabel[f] || f).join(", ")}</span>` : "<b>✓ đạt</b>"]),
+    {empty: "Chưa có dữ liệu.", onClick: (i) => {
+      historyName = rows[i].name;
+      showHistory(historyName);
+      $("history-card").scrollIntoView({behavior: "smooth", block: "start"});
+    }});
+  const more = $("watch-more");
+  more.hidden = watch.length <= WATCH_PAGE;
+  more.textContent = watchShowAll ? "Thu gọn" : `Hiện tất cả (${watch.length})`;
+  more.onclick = () => { watchShowAll = !watchShowAll; renderWatch(watch); };
+}
+
+/* ---------- Price history ---------- */
+async function showHistory(name) {
+  $("history-title").textContent = "Lịch sử giá: " + name;
+  const rows = await getJSON("/api/history?name=" + encodeURIComponent(name));
+  const series = [
+    {name: "Giá rao thấp nhất", color: "--series-1", values: rows.map((r) => r.min_price)},
+    {name: "Giá mục tiêu", color: "--series-2", values: rows.map((r) => r.median_30d)},
+  ];
+  lineChart($("history-chart"), rows.map((r) => r.day), series, {
+    label: "Lịch sử giá " + name,
+    extra: (i) => `<div class="t-row muted">Bán 30 ngày: ${rows[i].volume_30d}</div>`,
+  });
+  $("history-legend").innerHTML = series.map((s) =>
+    `<span><span class="swatch" style="background:${css(s.color)}"></span>${s.name}</span>`).join("");
+}
+
+/* ---------- Load everything ---------- */
+let historyName = null;
+
+async function load() {
+  const [summary, equity, signals, watch] = await Promise.all([
+    getJSON("/api/summary"), getJSON("/api/equity"), getJSON("/api/signals?limit=100"),
+    getJSON("/api/watchlist"),
+  ]);
+
+  $("asof").textContent = summary.day
+    ? `Dữ liệu ngày ${summary.day} · phí bán ${pct(summary.sell_fee)}`
+    : "Chưa có dữ liệu. Chạy `python -m cs2ts daily` trước.";
+  $("demo-banner").hidden = !summary.demo;
+  renderKpis(summary);
+
+  lineChart($("equity-chart"), equity.map((e) => e.day),
+    [{name: "Giá trị tài khoản", color: "--series-1", values: equity.map((e) => e.equity)}],
+    {reference: summary.budget, label: "Giá trị tài khoản theo ngày",
+     empty: "Chưa có dữ liệu. Chạy `python -m cs2ts daily` mỗi ngày để có đường này.",
+     extra: (i) => `<div class="t-row muted">Vị thế đang giữ: ${equity[i].open_positions}</div>`});
+  table($("equity-table"), ["Ngày", "Giá trị", "Lãi đã chốt", "Vị thế"],
+    equity.slice().reverse().map((e) => [e.day, usd(e.equity), pnlCell(e.realized), e.open_positions]));
+
+  table($("open-table"), ["Item", "Ngày mua", "Giá mua", "Giá trị nay", "Lãi/lỗ", "Số ngày"],
+    summary.open.map((p) => [esc(p.name), p.buy_day, usd(p.buy_price), usd(p.mark), pnlCell(p.mark - p.buy_price),
+      p.days_held < summary.trade_lock_days ? `${p.days_held} <span class="muted">(khóa)</span>` : p.days_held]),
+    {empty: "Chưa giữ món nào."});
+
+  table($("closed-table"), ["Item", "Mua", "Bán", "Lãi/lỗ", "Lý do"],
+    summary.closed.slice().reverse().map((p) => [esc(p.name), `${usd(p.buy_price)} <span class="muted">${p.buy_day.slice(5)}</span>`,
+      `${usd(p.net_proceeds)} <span class="muted">${p.sell_day.slice(5)}</span>`, pnlCell(p.net_proceeds - p.buy_price),
+      reasonLabel[p.exit_reason] || p.exit_reason]),
+    {empty: "Chưa có lệnh nào được đóng."});
+
+  table($("signals-table"), ["Item", "Giá mua", "Mục tiêu", "Bán sàn khác", "Buff", "YouPin", "Lãi ròng", "ROI", "Rẻ hơn", "Xu hướng 7d", "Bán 30 ngày"],
+    signals.map((s) => [esc(s.name), usd(s.buy_price), usd(s.target_price),
+      optUsd(s.ref_median), optUsd(s.buff_ask), optUsd(s.youpin_ask), usd(s.net_profit), pct(s.net_roi),
+      pct(s.discount), `<span class="${trendClass(s.momentum)}">${signed(s.momentum, pct)}</span>`, s.volume_30d]),
+    {empty: "Không có cơ hội nào đạt tiêu chí hôm nay.", onClick: (i) => { historyName = signals[i].name; showHistory(historyName); }});
+
+  renderWatch(watch);
+
+  const first = historyName || summary.open[0]?.name || signals[0]?.name || watch[0]?.name;
+  if (first) {
+    historyName = first;
+    showHistory(first);
+  } else {
+    $("history-chart").innerHTML = '<div class="empty">Chọn một cơ hội ở bảng trên để xem lịch sử giá.</div>';
+  }
+}
+
+$("refresh").addEventListener("click", load);
+$("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  load();
+});
+let resizeTimer;
+addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(load, 200); });
+load().catch((err) => { $("asof").textContent = "Lỗi tải dữ liệu: " + err.message; });
+</script>
+</body>
+</html>

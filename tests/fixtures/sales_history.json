@@ -1,0 +1,17 @@
+[
+  {"market_hash_name": "AK-47 | Slate (Field-Tested)", "currency": "USD", "item_page": "", "market_page": "",
+   "last_24_hours": {"min": 2.7, "max": 3.5, "avg": 3.1, "median": 3.1, "volume": 1600},
+   "last_7_days": {"min": 2.6, "max": 3.8, "avg": 3.1, "median": 3.05, "volume": 11000},
+   "last_30_days": {"min": 2.5, "max": 4.0, "avg": 3.2, "median": 3.1, "volume": 49000},
+   "last_90_days": {"min": 2.4, "max": 4.5, "avg": 3.3, "median": 3.2, "volume": 150000}},
+  {"market_hash_name": "M4A1-S | Black Lotus (Field-Tested)", "currency": "USD", "item_page": "", "market_page": "",
+   "last_24_hours": {"min": 7.0, "max": 8.5, "avg": 7.8, "median": 7.8, "volume": 900},
+   "last_7_days": {"min": 6.8, "max": 9.0, "avg": 7.9, "median": 7.8, "volume": 6000},
+   "last_30_days": {"min": 6.5, "max": 9.5, "avg": 8.1, "median": 8.0, "volume": 37000},
+   "last_90_days": {"min": 6.0, "max": 11.0, "avg": 8.6, "median": 8.5, "volume": 100000}},
+  {"market_hash_name": "M9 Bayonet | Doppler (Factory New)", "currency": "USD", "item_page": "", "market_page": "",
+   "last_24_hours": {"min": null, "max": null, "avg": null, "median": null, "volume": 0},
+   "last_7_days": {"min": 880.0, "max": 900.0, "avg": 890.0, "median": 890.0, "volume": 2},
+   "last_30_days": {"min": 850.0, "max": 1000.0, "avg": 920.0, "median": 920.0, "volume": 9},
+   "last_90_days": {"min": 800.0, "max": 1200.0, "avg": 950.0, "median": 940.0, "volume": 30}}
+]

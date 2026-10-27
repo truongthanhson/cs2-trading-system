@@ -1,0 +1,104 @@
+"""SQLite storage: daily price snapshots and paper-trading positions."""
+
+import sqlite3
+from pathlib import Path
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS snapshots (
+    day          TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    min_price    REAL,
+    listings     INTEGER,
+    median_24h   REAL,
+    volume_24h   INTEGER,
+    median_7d    REAL,
+    volume_7d    INTEGER,
+    median_30d   REAL,
+    volume_30d   INTEGER,
+    median_90d   REAL,
+    volume_90d   INTEGER,
+    PRIMARY KEY (day, name)
+);
+
+CREATE TABLE IF NOT EXISTS positions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT NOT NULL,
+    buy_day      TEXT NOT NULL,
+    buy_price    REAL NOT NULL,
+    target_price REAL NOT NULL,
+    sell_day     TEXT,
+    sell_price   REAL,
+    net_proceeds REAL,
+    exit_reason  TEXT
+);
+"""
+
+# Columns added after the first release; connect() adds them to older databases.
+# Cross-market data from CSMarketAPI, filled in after the daily snapshot.
+EXTRA_SNAPSHOT_COLUMNS = {
+    "ref_median": "REAL",    # sale median on other marketplaces (volume weighted)
+    "ref_volume": "INTEGER",  # sales behind ref_median
+    "buff_ask": "REAL",      # lowest listing on BUFF163
+    "youpin_ask": "REAL",    # lowest listing on YouPin
+}
+
+
+def connect(path: str | Path) -> sqlite3.Connection:
+    path = Path(path)
+    if str(path) != ":memory:":
+        path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA)
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(snapshots)")}
+    for column, kind in EXTRA_SNAPSHOT_COLUMNS.items():
+        if column not in have:
+            conn.execute(f"ALTER TABLE snapshots ADD COLUMN {column} {kind}")
+    conn.commit()
+    return conn
+
+
+def save_snapshot(conn: sqlite3.Connection, day: str, rows: list[dict]) -> int:
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO snapshots (
+            day, name, min_price, listings,
+            median_24h, volume_24h, median_7d, volume_7d,
+            median_30d, volume_30d, median_90d, volume_90d
+        ) VALUES (
+            :day, :name, :min_price, :listings,
+            :median_24h, :volume_24h, :median_7d, :volume_7d,
+            :median_30d, :volume_30d, :median_90d, :volume_90d
+        )
+        """,
+        [{**r, "day": day} for r in rows],
+    )
+    conn.commit()
+    return len(rows)
+
+
+def latest_day(conn: sqlite3.Connection) -> str | None:
+    row = conn.execute("SELECT MAX(day) FROM snapshots").fetchone()
+    return row[0]
+
+
+def snapshot(conn: sqlite3.Connection, day: str) -> dict[str, sqlite3.Row]:
+    rows = conn.execute("SELECT * FROM snapshots WHERE day = ?", (day,))
+    return {r["name"]: r for r in rows}
+
+
+def recent_values(conn: sqlite3.Connection, column: str, since: str, before: str) -> dict[str, list[float]]:
+    """Per item, non-null values of a snapshot column for days in [since, before)."""
+    rows = conn.execute(
+        f"SELECT name, {column} FROM snapshots WHERE day >= ? AND day < ?"
+        f" AND {column} IS NOT NULL ORDER BY day", (since, before))
+    out: dict[str, list[float]] = {}
+    for name, value in rows:
+        out.setdefault(name, []).append(value)
+    return out
+
+
+def update_snapshot(conn: sqlite3.Connection, day: str, name: str, **values) -> None:
+    columns = ", ".join(f"{k} = ?" for k in values)
+    conn.execute(f"UPDATE snapshots SET {columns} WHERE day = ? AND name = ?",
+                 (*values.values(), day, name))
