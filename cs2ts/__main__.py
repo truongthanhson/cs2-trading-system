@@ -37,12 +37,20 @@ def cmd_collect(conn, cfg, args):
         sys.exit(f"Unknown source {cfg.source!r}; use \"csfloat\" or \"skinport\".")
     n = save_snapshot(conn, day, rows)
     print(f"Saved {n} items for {day}.")
+    cmd_enrich(conn, cfg, argparse.Namespace(day=day, config=args.config))
+
+
+def cmd_enrich(conn, cfg, args):
+    """Add CSMarketAPI prices to a saved snapshot, if a key is configured."""
     key = csmarket.load_key(Path(args.config).parent / ".env")
-    if key:
-        csmarket.enrich(csmarket.Client(key), rows, cfg.csmarket_watch_size)
-        for r in rows:
-            update_snapshot(conn, day, r["name"], **{c: r.get(c) for c in EXTRA_SNAPSHOT_COLUMNS})
-        conn.commit()
+    if not key:
+        return
+    day = args.day or _require_day(conn)
+    rows = [dict(r) for r in snapshot(conn, day).values()]
+    csmarket.enrich(csmarket.Client(key), rows, cfg.csmarket_watch_size)
+    for r in rows:
+        update_snapshot(conn, day, r["name"], **{c: r.get(c) for c in EXTRA_SNAPSHOT_COLUMNS})
+    conn.commit()
 
 
 def _require_day(conn):
@@ -108,16 +116,20 @@ def cmd_daily(conn, cfg, args):
     cmd_report(conn, cfg, args)
 
 
+def daily_job(cfg, config_path):
+    conn = connect(cfg.db_path)
+    try:
+        cmd_daily(conn, cfg, argparse.Namespace(day=None, config=config_path))
+    finally:
+        conn.close()
+
+
 def cmd_serve(cfg, args):
     from . import scheduler
     from .dashboard import serve
 
     def job():
-        conn = connect(cfg.db_path)
-        try:
-            cmd_daily(conn, cfg, argparse.Namespace(day=None))
-        finally:
-            conn.close()
+        daily_job(cfg, args.config)
 
     def already_done(day):
         conn = connect(cfg.db_path)
@@ -136,7 +148,7 @@ def main(argv=None):
     parser.add_argument("--config", default="config.json")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    for name in ("collect", "daily"):
+    for name in ("collect", "daily", "enrich"):
         p = sub.add_parser(name)
         p.add_argument("--day", help="override the snapshot date (YYYY-MM-DD)")
     p = sub.add_parser("scan")
@@ -173,7 +185,7 @@ def main(argv=None):
     try:
         {
             "collect": cmd_collect, "scan": cmd_scan, "paper": cmd_paper,
-            "report": cmd_report, "daily": cmd_daily,
+            "report": cmd_report, "daily": cmd_daily, "enrich": cmd_enrich,
         }[args.command](conn, cfg, args)
     finally:
         conn.close()

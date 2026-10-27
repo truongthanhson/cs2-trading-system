@@ -27,6 +27,7 @@ python -m cs2ts daily     # lấy giá hôm nay + chạy paper trade + in báo c
 python -m cs2ts scan      # xem danh sách cơ hội hiện tại (top 30)
 python -m cs2ts scan --top 100 --csv signals.csv
 python -m cs2ts report    # xem lại báo cáo paper trade
+python -m cs2ts enrich    # chỉ lấy lại giá sàn khác (CSMarketAPI) cho dữ liệu đã lưu
 ```
 
 Chạy `daily` **mỗi ngày một lần**, đều đặn ít nhất 3–4 tuần. Có thể hẹn giờ tự chạy:

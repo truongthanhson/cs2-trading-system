@@ -300,6 +300,28 @@ class CliTest(unittest.TestCase):
             self.assertIn("Paper account on 2026-11-01", text)
             self.assertTrue((Path(tmp) / "s.csv").exists())
 
+    def test_scheduled_job_enriches_with_csmarket(self):
+        from cs2ts.__main__ import daily_job
+        items = json.loads((FIXTURES / "items.json").read_text())
+        history = json.loads((FIXTURES / "sales_history.json").read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "config.json"
+            (Path(tmp) / ".env").write_text("CSMARKETAPI_KEY=k\n")
+            cfg = Config(source="skinport", db_path=str(Path(tmp) / "db.sqlite"))
+            http, real_client = FakeHttp(), csmarket.Client
+            with mock.patch.dict("os.environ", {}, clear=True), \
+                 mock.patch("cs2ts.skinport.fetch_items", return_value=items), \
+                 mock.patch("cs2ts.skinport.fetch_sales_history", return_value=history), \
+                 mock.patch("cs2ts.csmarket.Client", lambda key: real_client(key, http)), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                daily_job(cfg, str(cfg_path))
+            conn = connect(cfg.db_path)
+            day = conn.execute("SELECT MAX(day) FROM snapshots").fetchone()[0]
+            refs = [r["ref_median"] for r in snapshot(conn, day).values()]
+            self.assertEqual(refs, [9.5] * 4)
+            self.assertGreater(conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0], 0)
+            conn.close()
+
 
 class FakeResponse:
     def __init__(self, data, remaining):
