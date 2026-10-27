@@ -319,14 +319,16 @@ function table(el, headers, rows, opts = {}) {
 
 const pnlCell = (v) => `<span class="${trendClass(v)}">${signed(v, usd)}</span>`;
 const reasonLabel = {target: "chạm mục tiêu", stop_loss: "cắt lỗ", max_hold: "giữ quá lâu"};
-const failLabel = {discount: "chưa đủ rẻ", roi: "lãi thấp", falling: "đang rớt giá", liquidity: "ít giao dịch", price_range: "ngoài khoảng giá"};
+const failLabel = {discount: "chưa đủ rẻ", roi: "lãi thấp", falling: "đang rớt giá", liquidity: "ít giao dịch", price_range: "ngoài khoảng giá", ref_gap: "sàn khác bán rẻ hơn"};
+const optUsd = (v) => v == null ? `<span class="muted">–</span>` : usd(v);
 const WATCH_PAGE = 30;
 let watchShowAll = false;
 
 function renderWatch(watch) {
   const rows = watchShowAll ? watch : watch.slice(0, WATCH_PAGE);
-  table($("watch-table"), ["Item", "Giá rao", "Mục tiêu", "Rẻ hơn", "ROI sau phí", "Xu hướng", "Bán 30 ngày", "Tình trạng"],
+  table($("watch-table"), ["Item", "Giá rao", "Mục tiêu", "Bán sàn khác", "Buff", "YouPin", "Rẻ hơn", "ROI sau phí", "Xu hướng", "Bán 30 ngày", "Tình trạng"],
     rows.map((w) => [esc(w.name), usd(w.buy_price), usd(w.target_price),
+      optUsd(w.ref_median), optUsd(w.buff_ask), optUsd(w.youpin_ask),
       `<span class="${trendClass(w.discount)}">${signed(w.discount, pct)}</span>`, signed(w.net_roi, pct),
       `<span class="${trendClass(w.momentum)}">${signed(w.momentum, pct)}</span>`, w.volume_30d,
       w.failed.length ? `<span class="muted">${w.failed.map((f) => failLabel[f] || f).join(", ")}</span>` : "<b>✓ đạt</b>"]),
@@ -391,8 +393,9 @@ async function load() {
       reasonLabel[p.exit_reason] || p.exit_reason]),
     {empty: "Chưa có lệnh nào được đóng."});
 
-  table($("signals-table"), ["Item", "Giá mua", "Mục tiêu", "Lãi ròng", "ROI", "Rẻ hơn", "Xu hướng 7d", "Bán 30 ngày"],
-    signals.map((s) => [esc(s.name), usd(s.buy_price), usd(s.target_price), usd(s.net_profit), pct(s.net_roi),
+  table($("signals-table"), ["Item", "Giá mua", "Mục tiêu", "Bán sàn khác", "Buff", "YouPin", "Lãi ròng", "ROI", "Rẻ hơn", "Xu hướng 7d", "Bán 30 ngày"],
+    signals.map((s) => [esc(s.name), usd(s.buy_price), usd(s.target_price),
+      optUsd(s.ref_median), optUsd(s.buff_ask), optUsd(s.youpin_ask), usd(s.net_profit), pct(s.net_roi),
       pct(s.discount), `<span class="${trendClass(s.momentum)}">${signed(s.momentum, pct)}</span>`, s.volume_30d]),
     {empty: "Không có cơ hội nào đạt tiêu chí hôm nay.", onClick: (i) => { historyName = signals[i].name; showHistory(historyName); }});
 

@@ -112,6 +112,25 @@ docker compose logs -f               # xem log của các lần chạy hằng ng
 | `max_momentum_drop` | 0.10 | Bỏ qua item có giá 7 ngày giảm hơn 10% so với 30 ngày |
 | `csfloat_universe_size` | 200 | Số item (rao nhiều nhất trong khoảng giá) được lấy lịch sử bán mỗi lần chạy |
 | `csfloat_request_delay` | 1.0 | Số giây nghỉ giữa các lần gọi API, để không bị giới hạn |
+| `max_ref_gap` | 0.10 | Bỏ qua item có giá mục tiêu cao hơn giá bán ở sàn khác quá 10% (chỉ khi có CSMarketAPI) |
+| `csmarket_watch_size` | 50 | Số item gần tín hiệu nhất được lấy giá rao trên Buff163 và YouPin |
+
+## So giá với sàn khác (CSMarketAPI, tùy chọn)
+
+Nếu có key của [CSMarketAPI](https://csmarketapi.com), mỗi lần chạy `collect`/`daily` tool sẽ:
+
+- Lấy trung vị giá bán hôm qua ở các sàn khác cho mọi item (cột **Bán sàn khác**, 1 credit/item). Bỏ qua CSFloat và DMarket (chỉ có giá trung bình, bị bản premium đẩy lên) và Steam (phí 15%, tiền bị khóa trong ví). Nếu giá mục tiêu cao hơn giá này quá `max_ref_gap`, item bị đánh dấu "sàn khác bán rẻ hơn" và không thành tín hiệu.
+- Lấy giá rao thấp nhất trên Buff163 và YouPin cho `csmarket_watch_size` item rẻ nhất so với mục tiêu (cột **Buff**, **YouPin**, 2 credit/item). Hai cột này chỉ để tham khảo.
+
+Với 200 item và 50 item theo dõi, mỗi ngày tốn khoảng 300 credit, tức khoảng 9.000/tháng, dưới mức 20.000 của gói miễn phí. Tool tự dừng khi còn dưới 500 credit.
+
+Cách cài: tạo file `.env` cạnh `config.json` (file này đã nằm trong `.gitignore`, **đừng commit key**):
+
+```
+CSMARKETAPI_KEY=key_cua_ban
+```
+
+Không có key thì tool chạy như cũ, các cột này để trống.
 
 ## Giới hạn cần biết
 
@@ -121,7 +140,6 @@ docker compose logs -f               # xem log của các lần chạy hằng ng
 - Mỗi lần chạy `daily` với CSFloat mất khoảng 7 phút, vì tool nghỉ 1 giây giữa mỗi lần gọi API (2 lần gọi cho mỗi item).
 - CSFloat chỉ cho khoảng **500 lần gọi lịch sử mỗi 24 giờ**. Với `csfloat_universe_size` = 200, mỗi ngày tool dùng khoảng 400 lần, nên **chỉ chạy `daily` một lần mỗi ngày**. Nếu sắp hết lượt, tool tự dừng sớm. Nếu sắp chạm giới hạn gọi API, tool tự dừng sớm và giữ phần dữ liệu đã lấy được.
 - Paper trade giả định bán được ngay ở giá rao thấp nhất. Thực tế có thể phải chờ lâu hơn.
-- Chưa so giá giữa các sàn. Phần này có thể thêm ở bản sau.
 
 ## Chạy test
 

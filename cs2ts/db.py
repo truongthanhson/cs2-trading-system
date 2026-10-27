@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS positions (
 );
 """
 
+# Columns added after the first release; connect() adds them to older databases.
+# Cross-market data from CSMarketAPI, filled in after the daily snapshot.
+EXTRA_SNAPSHOT_COLUMNS = {
+    "ref_median": "REAL",    # sale median on other marketplaces (volume weighted)
+    "ref_volume": "INTEGER",  # sales behind ref_median
+    "buff_ask": "REAL",      # lowest listing on BUFF163
+    "youpin_ask": "REAL",    # lowest listing on YouPin
+}
+
 
 def connect(path: str | Path) -> sqlite3.Connection:
     path = Path(path)
@@ -41,13 +50,22 @@ def connect(path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(snapshots)")}
+    for column, kind in EXTRA_SNAPSHOT_COLUMNS.items():
+        if column not in have:
+            conn.execute(f"ALTER TABLE snapshots ADD COLUMN {column} {kind}")
+    conn.commit()
     return conn
 
 
 def save_snapshot(conn: sqlite3.Connection, day: str, rows: list[dict]) -> int:
     conn.executemany(
         """
-        INSERT OR REPLACE INTO snapshots VALUES (
+        INSERT OR REPLACE INTO snapshots (
+            day, name, min_price, listings,
+            median_24h, volume_24h, median_7d, volume_7d,
+            median_30d, volume_30d, median_90d, volume_90d
+        ) VALUES (
             :day, :name, :min_price, :listings,
             :median_24h, :volume_24h, :median_7d, :volume_7d,
             :median_30d, :volume_30d, :median_90d, :volume_90d
@@ -78,3 +96,9 @@ def recent_values(conn: sqlite3.Connection, column: str, since: str, before: str
     for name, value in rows:
         out.setdefault(name, []).append(value)
     return out
+
+
+def update_snapshot(conn: sqlite3.Connection, day: str, name: str, **values) -> None:
+    columns = ", ".join(f"{k} = ?" for k in values)
+    conn.execute(f"UPDATE snapshots SET {columns} WHERE day = ? AND name = ?",
+                 (*values.values(), day, name))

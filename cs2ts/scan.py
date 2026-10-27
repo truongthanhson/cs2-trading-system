@@ -21,6 +21,17 @@ class Signal:
     momentum: float      # 7d median / 30d median - 1
     volume_30d: int
     listings: int
+    ref_median: float | None = None  # sale median on other marketplaces
+    buff_ask: float | None = None
+    youpin_ask: float | None = None
+
+
+def _optional(row, key):
+    """row[key], or None for rows saved before the column existed."""
+    try:
+        return row[key]
+    except (KeyError, IndexError):
+        return None
 
 
 def check(row, cfg: Config) -> tuple[Signal | None, list[str]]:
@@ -40,6 +51,8 @@ def check(row, cfg: Config) -> tuple[Signal | None, list[str]]:
         name=row["name"], buy_price=price, target_price=m30,
         net_profit=net_profit, net_roi=net_roi, discount=discount,
         momentum=momentum, volume_30d=row["volume_30d"], listings=row["listings"],
+        ref_median=_optional(row, "ref_median"), buff_ask=_optional(row, "buff_ask"),
+        youpin_ask=_optional(row, "youpin_ask"),
     )
 
     failed = []
@@ -54,6 +67,10 @@ def check(row, cfg: Config) -> tuple[Signal | None, list[str]]:
         failed.append("falling")
     if net_roi < cfg.min_net_roi:
         failed.append("roi")
+    # Our target is only CSFloat's view; if other marketplaces sell the item
+    # well below it, the target is probably too optimistic.
+    if sig.ref_median and m30 > sig.ref_median * (1 + cfg.max_ref_gap):
+        failed.append("ref_gap")
     return sig, failed
 
 

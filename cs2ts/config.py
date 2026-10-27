@@ -42,6 +42,12 @@ class Config:
     csfloat_universe_size: int = 200
     csfloat_request_delay: float = 1.0
 
+    # CSMarketAPI (used only when CSMARKETAPI_KEY is set): skip items whose
+    # target price is more than this far above what they sell for on other
+    # marketplaces, and fetch BUFF163/YouPin asks for this many items.
+    max_ref_gap: float = 0.10
+    csmarket_watch_size: int = 50
+
 
 def load_config(path: str | Path = "config.json") -> Config:
     path = Path(path)

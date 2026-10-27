@@ -13,12 +13,14 @@
 import argparse
 import csv
 import sys
+from pathlib import Path
 from datetime import date, timedelta
 
-from . import csfloat, paper, skinport
+from . import csfloat, csmarket, paper, skinport
 from .collect import merge
 from .config import load_config
-from .db import connect, latest_day, recent_values, save_snapshot, snapshot
+from .db import (EXTRA_SNAPSHOT_COLUMNS, connect, latest_day, recent_values, save_snapshot,
+                 snapshot, update_snapshot)
 from .scan import scan
 
 
@@ -35,6 +37,12 @@ def cmd_collect(conn, cfg, args):
         sys.exit(f"Unknown source {cfg.source!r}; use \"csfloat\" or \"skinport\".")
     n = save_snapshot(conn, day, rows)
     print(f"Saved {n} items for {day}.")
+    key = csmarket.load_key(Path(args.config).parent / ".env")
+    if key:
+        csmarket.enrich(csmarket.Client(key), rows, cfg.csmarket_watch_size)
+        for r in rows:
+            update_snapshot(conn, day, r["name"], **{c: r.get(c) for c in EXTRA_SNAPSHOT_COLUMNS})
+        conn.commit()
 
 
 def _require_day(conn):

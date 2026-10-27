@@ -8,12 +8,12 @@ from unittest import mock
 
 from datetime import date
 
-from cs2ts import csfloat, paper
+from cs2ts import csfloat, csmarket, paper
 from cs2ts.__main__ import main
 from cs2ts.collect import merge
 from cs2ts.config import Config, load_config
-from cs2ts.db import connect, save_snapshot
-from cs2ts.scan import evaluate, scan
+from cs2ts.db import connect, save_snapshot, snapshot, update_snapshot
+from cs2ts.scan import check, evaluate, scan
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -299,6 +299,105 @@ class CliTest(unittest.TestCase):
             self.assertIn("BUY  M4A1-S | Black Lotus (Field-Tested)", text)
             self.assertIn("Paper account on 2026-11-01", text)
             self.assertTrue((Path(tmp) / "s.csv").exists())
+
+
+class FakeResponse:
+    def __init__(self, data, remaining):
+        self.data, self.headers = data, {"x-quota-remaining": str(remaining)}
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.data
+
+
+class FakeHttp:
+    """Answers CSMarketAPI calls, counting down credits like the real API."""
+    def __init__(self, credits=10_000):
+        self.credits, self.calls = credits, []
+
+    def get(self, url, params, timeout):
+        params = dict(p for p in params if p[0] != "markets") | {
+            "markets": [v for k, v in params if k == "markets"]}
+        self.calls.append((url.rsplit("/v2/", 1)[1], params))
+        name = params["market_hash_name"]
+        if "sales" in url:
+            self.credits -= 1
+            data = {"market_hash_name": name, "sales": [
+                {"market": "CSFLOAT", "mean_price": 99.0, "median_price": None, "volume": 50},
+                {"market": "STEAM", "median_price": 12.0, "volume": 500},
+                {"market": "SKINPORT", "median_price": 9.0, "volume": 10},
+                {"market": "MARKETCSGO", "median_price": 9.5, "volume": 30},
+            ]}
+        else:
+            self.credits -= len(params["markets"])
+            data = {"market_hash_name": name, "listings": [
+                {"market": "BUFF163", "ask_price": 7.1}, {"market": "YOUPIN", "ask_price": 7.3}]}
+        return FakeResponse(data, self.credits)
+
+
+class CsMarketTest(unittest.TestCase):
+    def test_reference_median_weights_by_volume_and_skips_mean_only_markets(self):
+        sales = FakeHttp().get("x/v2/sales/latest/aggregate", [("market_hash_name", "a")], 1).json()["sales"]
+        self.assertEqual(csmarket.reference_median(sales), (9.5, 40))
+        self.assertEqual(csmarket.reference_median([]), (None, 0))
+
+    def test_enrich_checks_sales_for_all_and_asks_for_closest(self):
+        http = FakeHttp()
+        rows = [row("far", price=9.9), row("near", price=7.0), row("mid", price=8.5)]
+        csmarket.enrich(csmarket.Client("k", http), rows, watch_size=2, log=lambda *a: None)
+        by = {r["name"]: r for r in rows}
+        self.assertEqual(by["far"]["ref_median"], 9.5)
+        self.assertEqual(by["near"]["buff_ask"], 7.1)
+        self.assertEqual(by["mid"]["youpin_ask"], 7.3)
+        self.assertNotIn("buff_ask", by["far"])
+        asked = [p["market_hash_name"] for path, p in http.calls if path.startswith("listings")]
+        self.assertEqual(asked, ["near", "mid"])
+        self.assertEqual([p["markets"] for path, p in http.calls if path.startswith("listings")][0],
+                         ["BUFF163", "YOUPIN"])
+        self.assertEqual(http.credits, 10_000 - 3 - 4)
+
+    def test_enrich_stops_at_credit_reserve(self):
+        http = FakeHttp(credits=csmarket.CREDIT_RESERVE + 2)
+        rows = [row(f"i{n}") for n in range(5)]
+        logs = []
+        csmarket.enrich(csmarket.Client("k", http), rows, watch_size=5, log=logs.append)
+        self.assertEqual(len(http.calls), 2)
+        self.assertIn("stopping early", logs[0])
+
+    def test_load_key_from_env_file(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict("os.environ", {}, clear=True):
+            env = Path(tmp) / ".env"
+            self.assertIsNone(csmarket.load_key(env))
+            env.write_text("OTHER=1\nCSMARKETAPI_KEY='abc'\n")
+            self.assertEqual(csmarket.load_key(env), "abc")
+
+    def test_target_far_above_other_markets_fails_ref_gap(self):
+        cfg = Config()
+        _, failed = check(row(price=8.0) | {"ref_median": 8.5}, cfg)
+        self.assertIn("ref_gap", failed)
+        sig, failed = check(row(price=8.0) | {"ref_median": 9.5}, cfg)
+        self.assertEqual(failed, [])
+        self.assertEqual(sig.ref_median, 9.5)
+
+    def test_old_database_gets_new_columns(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.sqlite"
+            old = sqlite3.connect(path)
+            old.execute("CREATE TABLE snapshots (day TEXT, name TEXT, min_price REAL, listings INTEGER,"
+                        " median_24h REAL, volume_24h INTEGER, median_7d REAL, volume_7d INTEGER,"
+                        " median_30d REAL, volume_30d INTEGER, median_90d REAL, volume_90d INTEGER,"
+                        " PRIMARY KEY (day, name))")
+            old.commit()
+            old.close()
+            conn = connect(path)
+            save_snapshot(conn, "2026-10-27", [row("a")])
+            update_snapshot(conn, "2026-10-27", "a", ref_median=9.0, buff_ask=7.0)
+            conn.commit()
+            r = snapshot(conn, "2026-10-27")["a"]
+            self.assertEqual((r["ref_median"], r["buff_ask"], r["youpin_ask"]), (9.0, 7.0, None))
 
 
 class ConfigTest(unittest.TestCase):
