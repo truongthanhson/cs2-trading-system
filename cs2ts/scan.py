@@ -71,6 +71,14 @@ def check(row, cfg: Config) -> tuple[Signal | None, list[str]]:
     # well below it, the target is probably too optimistic.
     if sig.ref_median and m30 > sig.ref_median * (1 + cfg.max_ref_gap):
         failed.append("ref_gap")
+    # Not a deal if Buff or YouPin already sells it for less.
+    asks = [a for a in (sig.buff_ask, sig.youpin_ask) if a]
+    if asks and min(asks) <= price:
+        failed.append("cheaper_elsewhere")
+    # Doppler phases share one name but differ a lot in price; the cheapest
+    # listing is usually the cheapest phase, so the target means little.
+    if "Doppler" in row["name"]:
+        failed.append("phase")
     return sig, failed
 
 

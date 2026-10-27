@@ -404,6 +404,13 @@ class CsMarketTest(unittest.TestCase):
         self.assertEqual(failed, [])
         self.assertEqual(sig.ref_median, 9.5)
 
+    def test_cheaper_on_buff_or_doppler_is_not_a_signal(self):
+        cfg = Config()
+        _, failed = check(row(price=8.0) | {"buff_ask": 7.9, "youpin_ask": None}, cfg)
+        self.assertEqual(failed, ["cheaper_elsewhere"])
+        _, failed = check(row("Glock-18 | Gamma Doppler (Factory New)", price=8.0), cfg)
+        self.assertEqual(failed, ["phase"])
+
     def test_old_database_gets_new_columns(self):
         import sqlite3
         with tempfile.TemporaryDirectory() as tmp:

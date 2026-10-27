@@ -319,7 +319,7 @@ function table(el, headers, rows, opts = {}) {
 
 const pnlCell = (v) => `<span class="${trendClass(v)}">${signed(v, usd)}</span>`;
 const reasonLabel = {target: "chạm mục tiêu", stop_loss: "cắt lỗ", max_hold: "giữ quá lâu"};
-const failLabel = {discount: "chưa đủ rẻ", roi: "lãi thấp", falling: "đang rớt giá", liquidity: "ít giao dịch", price_range: "ngoài khoảng giá", ref_gap: "sàn khác bán rẻ hơn"};
+const failLabel = {discount: "chưa đủ rẻ", roi: "lãi thấp", falling: "đang rớt giá", liquidity: "ít giao dịch", price_range: "ngoài khoảng giá", ref_gap: "sàn khác bán rẻ hơn", cheaper_elsewhere: "Buff/YouPin rao rẻ hơn", phase: "giá theo phase (Doppler)"};
 const optUsd = (v) => v == null ? `<span class="muted">–</span>` : usd(v);
 const WATCH_PAGE = 30;
 let watchShowAll = false;

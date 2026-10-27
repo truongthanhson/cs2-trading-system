@@ -121,7 +121,7 @@ docker compose logs -f               # xem log của các lần chạy hằng ng
 Nếu có key của [CSMarketAPI](https://csmarketapi.com), mỗi lần chạy `collect`/`daily` tool sẽ:
 
 - Lấy trung vị giá bán hôm qua ở các sàn khác cho mọi item (cột **Bán sàn khác**, 1 credit/item). Bỏ qua CSFloat và DMarket (chỉ có giá trung bình, bị bản premium đẩy lên) và Steam (phí 15%, tiền bị khóa trong ví). Nếu giá mục tiêu cao hơn giá này quá `max_ref_gap`, item bị đánh dấu "sàn khác bán rẻ hơn" và không thành tín hiệu.
-- Lấy giá rao thấp nhất trên Buff163 và YouPin cho `csmarket_watch_size` item rẻ nhất so với mục tiêu (cột **Buff**, **YouPin**, 2 credit/item). Hai cột này chỉ để tham khảo.
+- Lấy giá rao thấp nhất trên Buff163 và YouPin cho `csmarket_watch_size` item rẻ nhất so với mục tiêu (cột **Buff**, **YouPin**, 2 credit/item). Nếu một trong hai sàn này đang rao rẻ hơn hoặc bằng giá mua trên CSFloat, item bị đánh dấu "Buff/YouPin rao rẻ hơn" và không thành tín hiệu.
 
 Với 200 item và 50 item theo dõi, mỗi ngày tốn khoảng 300 credit, tức khoảng 9.000/tháng, dưới mức 20.000 của gói miễn phí. Tool tự dừng khi còn dưới 500 credit.
 
@@ -134,6 +134,8 @@ CSMARKETAPI_KEY=key_cua_ban
 Không có key thì tool chạy như cũ, các cột này để trống.
 
 ## Giới hạn cần biết
+
+- Các skin Doppler / Gamma Doppler bị bỏ qua: các phase dùng chung một tên nhưng giá chênh nhau rất nhiều, và giá rao thấp nhất thường là phase rẻ nhất.
 
 - Giá rao thấp nhất có thể là món có float xấu hoặc pattern kém hơn các món khác cùng tên. Trước khi mua thật, luôn mở trang item để xem kỹ.
 - Với CSFloat, **giá mục tiêu** là trung vị giá bán của các bản "thường" trong 40 lượt bán gần nhất. Tool bỏ qua các bản bán đắt nhờ sticker, float hay pattern hiếm, vì chúng làm giá trung bình bị đẩy lên và tạo ra cơ hội giả. Item nào có ít hơn 5 lượt bán bản thường sẽ bị bỏ qua. Số lượt bán và xu hướng 7 ngày so với 30 ngày lấy từ dữ liệu theo ngày của CSFloat.
