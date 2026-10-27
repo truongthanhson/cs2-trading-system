@@ -64,7 +64,7 @@ Dữ liệu demo hoàn toàn ngẫu nhiên. Lãi/lỗ trong demo **không** nói
 
 ## Chạy trên server bằng Docker
 
-Container chạy dashboard ở cổng 8000 và tự chạy `daily` mỗi ngày lúc 12:15 (giờ Việt Nam). Dữ liệu nằm trong thư mục `data/` trên máy chủ, nên vẫn giữ nguyên khi cập nhật hay khởi động lại container.
+Container chạy dashboard ở cổng 8010 của máy chủ (đổi bằng biến `CS2TS_PORT`) và tự chạy `daily` mỗi ngày lúc 12:15 (giờ Việt Nam). Dữ liệu nằm trong thư mục `data/` trên máy chủ, nên vẫn giữ nguyên khi cập nhật hay khởi động lại container.
 
 ```bash
 cp config.example.json config.json   # bắt buộc trước lần chạy đầu
